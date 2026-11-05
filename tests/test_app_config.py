@@ -53,3 +53,13 @@ def test_kv_collection_has_no_api_rules():
     migration = next((ROOT / "pb_migrations").glob("*_init_crm.js")).read_text()
     kv = migration.split("const kv = new Collection(", 1)[1].split("app.save(kv)", 1)[0]
     assert "crmRules" not in kv and "Rule" not in kv
+
+
+def test_compose_files_have_no_cloudflared():
+    for name in ("compose.yaml", "compose.qnap.yaml"):
+        text = (ROOT / name).read_text()
+        assert "cloudflared" not in text and "TUNNEL_TOKEN" not in text, name
+
+
+def test_qnap_container_name_is_stable_for_logwatch_and_hotpot():
+    assert "container_name: brewcrm" in (ROOT / "compose.qnap.yaml").read_text()

@@ -1,8 +1,9 @@
 # QNAP Container Station: pulls the published image (no local build)
-# Web access via Cloudflare Tunnel: docker compose -f compose.qnap.yaml --profile tunnel up -d
+# Behind hotpot: see README "Behind hotpot and logwatch" (drop `ports`, join hotpot's network)
 services:
   brewcrm:
     image: ${IMAGE:?set IMAGE in .env}
+    container_name: brewcrm   # fixed name for logwatch TARGET_CONTAINER and hotpot HOTPOT_UPSTREAM
     env_file:
       - path: .env
         required: false
@@ -21,23 +22,6 @@ services:
     shm_size: 64m
     stop_signal: SIGTERM
     stop_grace_period: 30s
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
-
-  cloudflared:
-    image: cloudflare/cloudflared:2026.10.7
-    profiles: [tunnel]
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
-    depends_on: [brewcrm]
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
-    pids_limit: 100
-    mem_limit: 128m
     restart: unless-stopped
     logging:
       driver: json-file

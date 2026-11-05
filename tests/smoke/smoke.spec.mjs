@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL;
+const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL?.trim().toLowerCase();
 const ADMIN_PASSWORD = process.env.PB_ADMIN_PASSWORD;
 const REP = { email: `rep-${Date.now()}@example.com`, password: 'smoke-rep-password-123' };
 
@@ -33,6 +33,27 @@ test('CRM API requires auth', async ({ request }) => {
   expect((await request.get('/api/collections/kv/records')).status()).toBe(403);
   const create = await request.post('/api/collections/accounts/records', { data: { name: 'x' } });
   expect(create.status()).toBe(400);
+});
+
+test('.env admin signs in to the CRM (mixed-case email typed)', async ({ page }) => {
+  test.skip(!ADMIN_EMAIL, 'PB_ADMIN_EMAIL not set');
+  await page.goto('/');
+  await page.getByLabel('Email').fill(process.env.PB_ADMIN_EMAIL);
+  await page.getByLabel('Password').fill(ADMIN_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();
+});
+
+test('wrong password shows a clear message', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Email').fill('nobody@example.com');
+  await page.getByLabel('Password').fill('definitely-wrong-1');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('#loginErr')).toBeVisible();
+});
+
+test('anonymous CRM status is logged as 401', async ({ request }) => {
+  expect((await request.get('/api/crm/status')).status()).toBe(401);
 });
 
 test('admin creates a sales user', async ({ request }) => {

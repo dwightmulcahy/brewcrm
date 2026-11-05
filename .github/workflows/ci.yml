@@ -20,7 +20,8 @@ env:
   IMAGE: app:ci
   PORT: "8080"
   # Throwaway credentials for the ephemeral smoke-test container only
-  SMOKE_ADMIN_EMAIL: smoke-admin@example.com
+  # Mixed case on purpose: the entrypoint must normalise it
+  SMOKE_ADMIN_EMAIL: Smoke-Admin@Example.com
   SMOKE_ADMIN_PASSWORD: smoke-only-password-123
 
 jobs:
@@ -129,6 +130,28 @@ jobs:
           BASE_URL: http://localhost:${{ env.PORT }}
           PB_ADMIN_EMAIL: ${{ env.SMOKE_ADMIN_EMAIL }}
           PB_ADMIN_PASSWORD: ${{ env.SMOKE_ADMIN_PASSWORD }}
+      - name: Access log is one logwatch JSON object per line
+        run: |
+          docker logs app > app.log 2>&1
+          python3 - app.log <<'PY'
+          import json, sys
+          lines = [l for l in open(sys.argv[1], encoding="utf-8").read().splitlines() if l.strip()]
+          banner = ("Server started", "├─", "└─")
+          records, bad = [], []
+          for l in lines:
+              try:
+                  records.append(json.loads(l))
+              except ValueError:
+                  if not any(b in l for b in banner):
+                      bad.append(l)
+          need = {"timestamp", "level", "method", "path", "status_code", "duration_ms", "client", "user_agent"}
+          missing = [r for r in records if not need <= r.keys()]
+          assert not bad, f"non-JSON log lines: {bad[:5]}"
+          assert not missing, f"records missing fields: {missing[:3]}"
+          assert any(r["path"] == "/health" and r["status_code"] == 200 for r in records), "no /health access lines"
+          assert any(r["status_code"] == 401 for r in records), "auth failures not logged with their status"
+          print(f"{len(records)} JSON access lines OK")
+          PY
       - name: Scan image for fixable high and critical vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
