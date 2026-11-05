@@ -13,6 +13,25 @@ const gmailBase = () => env("GMAIL_BASE_URL", "https://gmail.googleapis.com");
 const tokenUrl = () => env("GOOGLE_TOKEN_URL", "https://oauth2.googleapis.com/token");
 
 const nowIso = () => new Date().toISOString();
+
+// ------------------------------------------------------------ logging
+// One JSON object per line on stdout (logwatch format). console.log would add a
+// "2026/11/05 12:00:00 " prefix, so write raw when stdout is a pipe (Docker).
+// $os.writeFile truncates, which only matters when stdout is a regular file.
+function writeJsonLine(obj) {
+  const json = JSON.stringify(obj);
+  let raw = false;
+  try { raw = !$os.stat("/dev/stdout").mode().isRegular(); } catch (_) {}
+  if (raw) $os.writeFile("/dev/stdout", json + "\n", 0o644);
+  else console.log(json);
+}
+
+// App message (no "path"): logwatch counts INFO/WARNING and flags ERROR/CRITICAL
+function log(level, message, extra) {
+  const line = { timestamp: nowIso(), level: level, message: String(message) };
+  if (extra !== undefined) line.detail = extra instanceof Error || (extra && extra.message) ? String(extra.message || extra) : extra;
+  try { writeJsonLine(line); } catch (_) {}
+}
 const monthKey = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 
 // PocketBase date strings look like "2026-11-04 12:00:00.000Z"
@@ -615,6 +634,7 @@ function status() {
 }
 
 module.exports = {
+  writeJsonLine, log,
   env, kvGet, kvSet, kvDel, placesSearch, placeDetails, convertLead,
   googleAuthUrl, googleCallback, gmailSync, loyverseCustomers, loyverseSync,
   dormantSweep, onTouchCreated, status, appUrl, areaFromAddress, typeFromPlace,
