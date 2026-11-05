@@ -1,0 +1,17 @@
+{
+  "include": [
+    "pb_hooks/**",
+    "pb_migrations/**",
+    "scripts/**/*.mjs"
+  ],
+  "reporter": [
+    "text",
+    "lcov"
+  ],
+  "report-dir": "coverage/unit",
+  "check-coverage": true,
+  "lines": 90,
+  "functions": 90,
+  "branches": 85,
+  "statements": 90
+}

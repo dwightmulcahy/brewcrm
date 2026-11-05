@@ -45,3 +45,8 @@ logs/
 # PocketBase data (local runs)
 pb_data/
 .ruff_cache/
+
+# test output
+coverage/
+.cache/
+playwright-report-e2e/

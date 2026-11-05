@@ -86,7 +86,55 @@ jobs:
         run: |
           ruff check . --select F
           pyflakes scripts tests
-      - run: python -m pytest -q
+      - name: pytest (coverage gate 90%)
+        run: >-
+          python -m pytest -q
+          --cov=scripts --cov=.github/actions/release-notes
+          --cov-report=term-missing --cov-fail-under=90
+
+  unit:
+    name: Unit tests + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Hooks, migrations and build script (c8 gate in .c8rc.json)
+        run: npm run test:unit
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: coverage-unit
+          path: coverage/unit/
+          retention-days: 7
+
+  e2e:
+    name: E2E + coverage
+    runs-on: ubuntu-latest
+    needs: [syntax]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Fetch PocketBase (checksum-verified, version from Dockerfile)
+        run: echo "PB_BIN=$(scripts/fetch-pocketbase.sh)" >> "$GITHUB_ENV"
+      - name: Full-app tests against PocketBase + fake integrations (app.js coverage gate 90%)
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: coverage-e2e
+          path: |
+            coverage/e2e/
+            playwright-report-e2e/
+          retention-days: 7
 
   docker-smoke:
     name: Docker image + Chromium smoke
