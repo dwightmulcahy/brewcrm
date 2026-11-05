@@ -159,13 +159,22 @@ npm run build:web        # -> dist/web
 npm run build:offline    # -> dist/offline
 pip install -r requirements-dev.txt && pytest
 docker compose up -d --build
-npx playwright install chromium
-BASE_URL=http://localhost:8080 PB_ADMIN_EMAIL=... PB_ADMIN_PASSWORD=... npm run test:smoke
 ```
 
-The smoke suite checks `/health`, that sign-up and anonymous data access are blocked, and a full sign-in → new account → log visit → pipeline/follow-up flow.
+### Tests and coverage
+
+| Suite | Command | Covers | Gate |
+|---|---|---|---|
+| Unit | `npm run test:unit` | `pb_hooks/`, `pb_migrations/`, `scripts/build.mjs`, run in Node against an in-memory PocketBase fake (`tests/unit/pbfake.mjs`) | 90% lines (`.c8rc.json`) |
+| E2E | `PB_BIN=$(scripts/fetch-pocketbase.sh) npm run test:e2e` | Every screen and dialog in `pb_public/app.js`, against a real PocketBase with fake Places/Gmail/OAuth/Loyverse servers (`tests/e2e/`) | 90% lines of `app.js` (Chromium V8 coverage) |
+| Python | `pytest --cov=scripts --cov=.github/actions/release-notes --cov-fail-under=90` | Build, config/policy checks, release notes against a real git repo | 90% |
+| Smoke | `BASE_URL=http://localhost:8080 PB_ADMIN_EMAIL=... PB_ADMIN_PASSWORD=... npm run test:smoke` | The built Docker image: health, auth, sign-in → account → visit | — |
+
+`scripts/fetch-pocketbase.sh` downloads the PocketBase version pinned in the `Dockerfile` and verifies it against the release checksums. CI runs all four suites; reports are uploaded as the `coverage-unit` and `coverage-e2e` artifacts.
 
 CI pins every external GitHub Action to a commit SHA, pins the Docker base image by version and digest, verifies the PocketBase download against the release checksums, and rejects fixable high/critical image vulnerabilities with Trivy. PocketBase itself is pinned by `ARG PB_VERSION` in the `Dockerfile` and is not tracked by Dependabot.
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for planned improvements.
 
 ## Releasing
 
