@@ -77,6 +77,7 @@ test('Loyverse: link a customer, import orders, unlink, manual sync', async ({ p
   await dialog(page).getByRole('button', { name: 'Search' }).click();
   await dialog(page).getByRole('button', { name: 'Link' }).first().click();
   await expect(toast(page)).toHaveText('Loyverse is down.');
+  await expect(page.getByRole('button', { name: 'Unlink' })).toBeVisible(); // re-render finished
   await page.unroute('**/api/crm/sync/pos');
   await page.getByRole('link', { name: 'Settings' }).click();
   await page.locator('#sqSync').click();
