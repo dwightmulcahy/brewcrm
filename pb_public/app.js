@@ -107,10 +107,15 @@ const routes = {};
 function route(name, fn) { routes[name] = fn; }
 
 async function render() {
-  if (!pb.authStore.isValid) { $("#topbar").hidden = true; return renderLogin(); }
-  $("#topbar").hidden = false;
   const [path, query] = (location.hash.replace(/^#\/?/, "") || "pipeline").split("?");
   const [name, id] = path.split("/");
+  // Pages that work without signing in
+  if (name === "forgot") { $("#topbar").hidden = true; return renderForgot(); }
+  if (name === "reset") { $("#topbar").hidden = true; return renderReset(id); }
+  if (!pb.authStore.isValid) { $("#topbar").hidden = true; return renderLogin(); }
+  // A temporary password (set by the admin) must be replaced before anything else
+  if (pb.authStore.record?.must_change_password) { $("#topbar").hidden = true; return renderForcedChange(); }
+  $("#topbar").hidden = false;
   $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === name));
   const fn = routes[name] || routes.pipeline;
   app.innerHTML = `<p class="muted">Loading…</p>`;
@@ -147,6 +152,7 @@ function renderLogin() {
       <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
       <p id="loginErr" class="due small" hidden style="margin:0">Wrong email or password. The admin account from PB_ADMIN_EMAIL works here and at <a href="/_/">/_/</a>.</p>
       <button class="btn btn-primary" type="submit">Sign in</button>
+      <a class="small" href="#/forgot">Forgot password?</a>
     </form>`;
   showBuildVersion();
   $("#loginForm").addEventListener("submit", async (ev) => {
@@ -154,12 +160,158 @@ function renderLogin() {
     const f = formData(ev.target);
     try {
       await busy($("button", ev.target), () => pb.collection("users").authWithPassword(f.email.toLowerCase(), f.password));
-    } catch (_) {
-      $("#loginErr").hidden = false;
+    } catch (e) {
+      const err = $("#loginErr");
+      if (e?.status === 429) err.textContent = "Too many sign-in attempts. Wait a minute and try again.";
+      err.hidden = false;
       return;
     }
     await loadStatus();
     render();
+  });
+}
+
+// ---------------------------------------------------------------- passwords
+// Same rules as pb_hooks/lib/crm.js passwordProblems (the server enforces them).
+let PUBLIC = { password_reset: false, password_min: 12, password_long: 16 };
+const publicConfig = fetch("/api/crm/public-config", { cache: "no-store" })
+  .then((r) => (r.ok ? r.json() : null)).then((c) => { if (c) PUBLIC = c; }).catch(() => {});
+
+function passwordChecks(pw, email) {
+  const n = Array.from(pw).length;
+  const local = String(email || "").toLowerCase().split("@")[0];
+  return [
+    [`At least ${PUBLIC.password_min} characters`, n >= PUBLIC.password_min],
+    ["A letter", /[A-Za-z\u00C0-\u024F]/.test(pw)],
+    ["A number", /[0-9]/.test(pw)],
+    [`A symbol, or ${PUBLIC.password_long}+ characters`, n >= PUBLIC.password_long || /[^A-Za-z0-9\u00C0-\u024F\s]/.test(pw)],
+    ["Doesn't contain your email name", !(local.length >= 4 && pw.toLowerCase().includes(local))],
+  ];
+}
+
+// New + confirm inputs with a live checklist; returns a validator for submit
+function newPasswordFields(form, email) {
+  const html = `
+    <label>New password<input name="password" type="password" autocomplete="new-password" required data-pw-new></label>
+    <ul class="pw-rules" data-pw-rules aria-live="polite"></ul>
+    <label>Confirm new password<input name="passwordConfirm" type="password" autocomplete="new-password" required data-pw-confirm></label>
+    <p class="due small" data-pw-mismatch hidden style="margin:0">The passwords don't match.</p>`;
+  const wire = () => {
+    const pw = $("[data-pw-new]", form), confirm = $("[data-pw-confirm]", form), list = $("[data-pw-rules]", form), mismatch = $("[data-pw-mismatch]", form);
+    const draw = () => {
+      list.innerHTML = passwordChecks(pw.value, email).map(([label, ok]) => `<li class="${ok ? "ok" : ""}">${ok ? "✓" : "•"} ${esc(label)}</li>`).join("");
+      mismatch.hidden = !confirm.value || confirm.value === pw.value;
+    };
+    pw.addEventListener("input", draw); confirm.addEventListener("input", draw); draw();
+    return () => {
+      const failed = passwordChecks(pw.value, email).filter(([, ok]) => !ok);
+      if (failed.length) { toast("Password needs: " + failed.map(([l]) => l.toLowerCase()).join(", "), true); pw.focus(); return false; }
+      if (pw.value !== confirm.value) { mismatch.hidden = false; confirm.focus(); return false; }
+      return true;
+    };
+  };
+  return { html, wire };
+}
+
+// Change own password, then sign in again (PocketBase invalidates old sessions on change)
+async function changeOwnPassword(oldPassword, password) {
+  const me = pb.authStore.record;
+  await pb.collection("users").update(me.id, { oldPassword, password, passwordConfirm: password });
+  await pb.collection("users").authWithPassword(me.email, password);
+}
+
+function renderForcedChange() {
+  const email = pb.authStore.record?.email || "";
+  const fields = newPasswordFields(null, email);
+  app.innerHTML = `
+    <form class="login form" id="forceForm">
+      <h1>Choose your password</h1>
+      <p class="muted">You signed in with a temporary password from your admin. Pick your own to continue.</p>
+      <label>Temporary password<input name="oldPassword" type="password" autocomplete="current-password" required></label>
+      ${fields.html}
+      <button class="btn btn-primary" type="submit">Save password</button>
+      <button class="btn" type="button" id="forceOut">Sign out</button>
+    </form>`;
+  const form = $("#forceForm");
+  const valid = newPasswordFields(form, email).wire();
+  $("#forceOut").addEventListener("click", () => { pb.authStore.clear(); location.hash = ""; render(); });
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!valid()) return;
+    const f = formData(form);
+    try { await busy($("button[type=submit]", form), () => changeOwnPassword(f.oldPassword, f.password)); } catch (_) { return; }
+    toast("Password saved");
+    await loadStatus();
+    location.hash = "#/pipeline";
+    render();
+  });
+}
+
+async function renderForgot() {
+  await publicConfig;
+  if (!PUBLIC.password_reset) {
+    app.innerHTML = `
+      <div class="login form">
+        <h1>Forgot password</h1>
+        <p>Password reset emails aren't set up on this BrewCRM yet. Ask your admin to set a temporary password for you in the admin dashboard. You'll choose your own when you sign in.</p>
+        <a class="btn" href="#/">Back to sign in</a>
+      </div>`;
+    return;
+  }
+  app.innerHTML = `
+    <form class="login form" id="forgotForm">
+      <h1>Forgot password</h1>
+      <p class="muted">Enter your email. If it belongs to a BrewCRM account, we'll send a link to choose a new password.</p>
+      <label>Email<input name="email" type="email" autocomplete="username" required></label>
+      <button class="btn btn-primary" type="submit">Email me a reset link</button>
+      <a class="small" href="#/">Back to sign in</a>
+    </form>`;
+  $("#forgotForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const f = formData(ev.target);
+    try {
+      await busy($("button", ev.target), () => pb.collection("users").requestPasswordReset(f.email.toLowerCase()));
+    } catch (e) { if (e?.status !== 429) return; }
+    app.innerHTML = `
+      <div class="login form">
+        <h1>Check your email</h1>
+        <p>If <strong>${esc(f.email)}</strong> has a BrewCRM account, a reset link is on its way. It works for 30 minutes.</p>
+        <a class="btn" href="#/">Back to sign in</a>
+      </div>`;
+  });
+}
+
+function renderReset(token) {
+  if (!token) { location.hash = "#/forgot"; return; }
+  let email = "";
+  try { email = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).email || ""; } catch (_) {}
+  const fields = newPasswordFields(null, email);
+  app.innerHTML = `
+    <form class="login form" id="resetForm">
+      <h1>Choose a new password</h1>
+      ${email ? `<p class="muted">For ${esc(email)}</p>` : ""}
+      ${fields.html}
+      <button class="btn btn-primary" type="submit">Save new password</button>
+    </form>`;
+  const form = $("#resetForm");
+  const valid = newPasswordFields(form, email).wire();
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!valid()) return;
+    const f = formData(form);
+    try {
+      await busy($("button", form), () => pb.collection("users").confirmPasswordReset(token, f.password, f.passwordConfirm));
+    } catch (e) {
+      if (/token/i.test(errMsg(e))) toast("This reset link has expired or was already used. Request a new one.", true);
+      return;
+    }
+    pb.authStore.clear();
+    app.innerHTML = `
+      <div class="login form">
+        <h1>Password saved</h1>
+        <p>Sign in with your new password.</p>
+        <a class="btn btn-primary" href="#/">Sign in</a>
+      </div>`;
   });
 }
 
@@ -728,6 +880,7 @@ route("settings", async (_, qs) => {
     !s.google?.configured && "Gmail",
     !s.pos?.configured && "Loyverse POS",
     !s.places?.configured && "Google Maps lead search",
+    !s.mail?.configured && "Password reset emails",
   ].filter(Boolean);
   const setupClass = (ok) => (ok ? "panel" : "panel needs-setup");
   app.innerHTML = `
@@ -759,10 +912,35 @@ route("settings", async (_, qs) => {
         <p class="small muted">Caps stay below Google's free monthly allowance. Change them in .env.</p>
       </section>
       <section class="panel">
+        <h3>Your password</h3>
+        <form class="form" id="pwForm">
+          <label>Current password<input name="oldPassword" type="password" autocomplete="current-password" required></label>
+          ${newPasswordFields(null, pb.authStore.record?.email).html}
+          <div><button class="btn btn-primary" type="submit">Change password</button></div>
+        </form>
+      </section>
+      <section class="${setupClass(s.mail?.configured)}">
+        <h3>Password reset emails</h3>
+        ${s.mail?.configured
+          ? `<p>On. "Forgot password?" emails a reset link from <strong>${esc(s.mail.sender || "your mail server")}</strong>.</p>`
+          : envWarning(["SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD"], "email password-reset links") + `<p class="small muted">Or set up mail in the <a href="/_/#/settings/mail" target="_blank" rel="noopener">admin dashboard</a>. Until then, reset a password by setting a temporary one for the user in the admin dashboard.</p>`}
+      </section>
+      <section class="panel">
         <h3>Users and backups</h3>
         <p>Add sales users, export data and schedule backups in the <a href="/_/" target="_blank" rel="noopener">admin dashboard</a>.</p>
+        <p class="small muted">New users and passwords you set there are temporary: the user picks their own at the next sign-in. Passwords need ${PUBLIC.password_min}+ characters with a letter and a number, plus a symbol unless they're ${PUBLIC.password_long}+ characters. The dashboard's "Generate" button makes a password that meets this (rarely it won't have a number; just generate again).</p>
       </section>
     </div>`;
+  const pwForm = $("#pwForm");
+  const pwValid = newPasswordFields(pwForm, pb.authStore.record?.email).wire();
+  pwForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!pwValid()) return;
+    const f = formData(pwForm);
+    try { await busy($("button[type=submit]", pwForm), () => changeOwnPassword(f.oldPassword, f.password)); } catch (_) { return; }
+    pwForm.reset(); $("[data-pw-new]", pwForm).dispatchEvent(new Event("input"));
+    toast("Password changed");
+  });
   $("#logout").addEventListener("click", () => { pb.authStore.clear(); location.hash = ""; render(); });
   const conn = $("#gConn");
   if (conn) conn.addEventListener("click", async () => { const r = await busy(conn, () => api("/google/auth-url")); location.href = r.url; });
@@ -781,6 +959,7 @@ $("#quickLog").addEventListener("click", () => {
 });
 
 (async () => {
+  await publicConfig;
   if (pb.authStore.isValid) {
     try { await pb.collection("users").authRefresh(); } catch (_) { pb.authStore.clear(); }
     await loadStatus();

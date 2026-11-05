@@ -24,6 +24,12 @@ if [ -n "${PB_ADMIN_PASSWORD:-}" ]; then
   export PB_ADMIN_PASSWORD
 fi
 
+# Fail fast with a clear message instead of PocketBase's terse validation error
+if [ -n "${PB_ADMIN_PASSWORD:-}" ] && [ "${#PB_ADMIN_PASSWORD}" -lt 12 ]; then
+  printf '{"timestamp":"%s","level":"CRITICAL","message":"PB_ADMIN_PASSWORD must be at least 12 characters (with a letter and a number; a symbol unless it is 16+). Fix .env and restart."}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  exit 1
+fi
+
 # Create/refresh the admin (superuser, /_/) from .env on every start, if provided.
 # pb_hooks mirrors the same credentials into a CRM user for the main sign-in page.
 if [ -n "${PB_ADMIN_EMAIL:-}" ] && [ -n "${PB_ADMIN_PASSWORD:-}" ]; then
