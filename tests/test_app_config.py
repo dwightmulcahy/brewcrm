@@ -63,3 +63,14 @@ def test_compose_files_have_no_cloudflared():
 
 def test_qnap_container_name_is_stable_for_logwatch_and_hotpot():
     assert "container_name: brewcrm" in (ROOT / "compose.qnap.yaml").read_text()
+
+
+def test_hooks_log_only_through_the_json_writer():
+    # logwatch flags every non-JSON stdout line; console.log adds a timestamp prefix
+    offenders = []
+    for path in HOOKS.rglob("*.js"):
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            code = line.split("//", 1)[0]
+            if "console.log(" in code and "else console.log(json)" not in code:
+                offenders.append(f"{path.relative_to(ROOT)}:{n}")
+    assert not offenders, f"use crm.log(level, message, detail) instead: {offenders}"

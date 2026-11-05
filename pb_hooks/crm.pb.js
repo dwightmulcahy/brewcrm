@@ -25,7 +25,7 @@ onBootstrap((e) => {
     user.setVerified(true);
     $app.save(user);
   } catch (err) {
-    console.log("could not create CRM user from PB_ADMIN_EMAIL:", err);
+    require(`${__hooks}/lib/crm.js`).log("ERROR", "could not create CRM user from PB_ADMIN_EMAIL", err);
   }
 });
 
@@ -57,14 +57,7 @@ routerUse((e) => {
       user_agent: e.request.header.get("User-Agent") || "",
       api_key: null,
     };
-    // Docker stdout is a pipe: write raw (console.log adds a timestamp prefix, breaking
-    // one-JSON-object-per-line). writeFile truncates, which only matters for regular files,
-    // so fall back to console.log when stdout is redirected to a file.
-    const json = JSON.stringify(line);
-    let raw = false;
-    try { raw = !$os.stat("/dev/stdout").mode().isRegular(); } catch (_) {}
-    if (raw) $os.writeFile("/dev/stdout", json + "\n", 0o644);
-    else console.log(json);
+    require(`${__hooks}/lib/crm.js`).writeJsonLine(line);
   } catch (_) {}
   if (failure) throw failure;
 });
@@ -118,7 +111,7 @@ routerAdd("GET", "/api/crm/google/callback", (e) => {
   if (q.get("error")) return e.redirect(302, "/#/settings?google=" + encodeURIComponent(q.get("error")));
   try {
     crm.googleCallback(q.get("code"), q.get("state"));
-    try { crm.gmailSync(); } catch (err) { console.log("initial gmail sync failed:", err); }
+    try { crm.gmailSync(); } catch (err) { crm.log("ERROR", "initial gmail sync failed", err); }
     return e.redirect(302, "/#/settings?google=connected");
   } catch (err) {
     return e.redirect(302, "/#/settings?google=" + encodeURIComponent(String(err.message || err).slice(0, 200)));
@@ -162,7 +155,7 @@ onRecordCreateRequest((e) => {
 
 onRecordAfterCreateSuccess((e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
-  try { crm.onTouchCreated(e.app, e.record); } catch (err) { console.log("touch side-effects failed:", err); }
+  try { crm.onTouchCreated(e.app, e.record); } catch (err) { crm.log("ERROR", "touch side-effects failed", err); }
   e.next();
 }, "touches");
 
@@ -194,15 +187,15 @@ onRecordCreateRequest((e) => {
 // ---------------------------------------------------------------- cron
 cronAdd("crm_gmail_sync", "*/15 * * * *", () => {
   const crm = require(`${__hooks}/lib/crm.js`);
-  try { console.log("gmail sync", JSON.stringify(crm.gmailSync())); } catch (err) { console.log("gmail sync error:", err); }
+  try { crm.log("INFO", "gmail sync", crm.gmailSync()); } catch (err) { crm.log("ERROR", "gmail sync failed", err); }
 });
 
 cronAdd("crm_pos_sync", "7 * * * *", () => {
   const crm = require(`${__hooks}/lib/crm.js`);
-  try { console.log("loyverse sync", JSON.stringify(crm.loyverseSync())); } catch (err) { console.log("loyverse sync error:", err); }
+  try { crm.log("INFO", "loyverse sync", crm.loyverseSync()); } catch (err) { crm.log("ERROR", "loyverse sync failed", err); }
 });
 
 cronAdd("crm_dormant_sweep", "15 6 * * *", () => {
   const crm = require(`${__hooks}/lib/crm.js`);
-  try { console.log("dormant sweep", JSON.stringify(crm.dormantSweep())); } catch (err) { console.log("dormant sweep error:", err); }
+  try { crm.log("INFO", "dormant sweep", crm.dormantSweep()); } catch (err) { crm.log("ERROR", "dormant sweep failed", err); }
 });
