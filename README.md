@@ -93,6 +93,16 @@ BrewCRM writes one JSON line per request to stdout in logwatch's format (`timest
 
 Do not expose QTS admin ports to the internet.
 
+## Users and passwords
+
+- **Adding a salesperson:** `/_/` → Collections → users → New record. Enter their email and a password (the **Generate** button makes a 20-character one and copies it), then send it to them yourself. That password is **temporary**: at first sign-in BrewCRM makes them choose their own, and CRM data stays locked until they do.
+- **Resetting a password as admin:** set a new one for the user in `/_/`. It becomes temporary again. To skip the forced change, untick **must_change_password** on the user.
+- **Users** change their own password under **Settings → Your password** (current password required).
+- **Forgot password?** on the sign-in page emails a reset link (valid 30 minutes) once outgoing mail is set up: either `SMTP_*` in `.env` (Gmail: `smtp.gmail.com`, port 587, an [App Password](https://myaccount.google.com/apppasswords)) or `/_/` → Settings → Mail. `APP_URL` must be the address users open, since it's used in the link. Without mail, the page tells users to ask you for a temporary password.
+- **Rules,** enforced by the server: 12+ characters with a letter and a number, plus a symbol unless it's 16+ characters, and it can't contain the email name. Passwords are stored as bcrypt hashes.
+- **The `.env` admin** (`PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD`) is never forced to change. Its CRM password is re-applied only when the `.env` value changes, so a password changed in BrewCRM survives restarts. A `PB_ADMIN_PASSWORD` under 12 characters stops the container with a clear log message.
+- **Rate limits** (per client IP): 10 sign-ins per minute and 3 reset emails per 5 minutes. Behind hotpot, set Trusted proxy → `X-Real-IP` (see above) or the whole team shares one limit. `RATE_LIMITS=0` turns them off.
+
 ## Google Maps lead search (Places API New)
 
 1. [console.cloud.google.com](https://console.cloud.google.com) → new project → Billing: attach a billing account (required even for free usage).

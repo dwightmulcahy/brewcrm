@@ -131,6 +131,10 @@ label { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); font-weig
 .env-warn-summary { margin-bottom: 16px; font-size: 15px; }
 .panel.needs-setup { border-color: var(--danger); box-shadow: inset 4px 0 0 var(--danger); }
 
+/* ---------- password rules ---------- */
+.pw-rules { list-style: none; margin: -4px 0 0; padding: 0; display: grid; gap: 2px; font-size: 13px; color: var(--ink-2); }
+.pw-rules li.ok { color: var(--ok); }
+
 /* ---------- lists / tables ---------- */
 .list { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); }
 .item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px 14px; border-top: 1px solid var(--line); }

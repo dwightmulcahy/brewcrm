@@ -37,14 +37,14 @@ def test_public_signup_is_disabled_in_schema():
     assert "users.createRule = null" in migration
 
 
-def test_crm_routes_require_auth_except_health_and_oauth_callback():
+def test_crm_routes_require_auth_except_public_ones():
     src = (HOOKS / "crm.pb.js").read_text()
     blocks = re.split(r"\nrouterAdd\(", src)[1:]
     for block in blocks:
         path = re.match(r'"[A-Z]+",\s*"([^"]+)"', block).group(1)
         handler_end = block.index("\n}")
         tail = block[handler_end:handler_end + 40]
-        if path in {"/health", "/api/crm/google/callback"}:
+        if path in {"/health", "/api/crm/google/callback", "/api/crm/public-config"}:
             continue
         assert "$apis.requireAuth()" in tail, f"{path} must require auth"
 
@@ -74,3 +74,24 @@ def test_hooks_log_only_through_the_json_writer():
             if "console.log(" in code and "else console.log(json)" not in code:
                 offenders.append(f"{path.relative_to(ROOT)}:{n}")
     assert not offenders, f"use crm.log(level, message, detail) instead: {offenders}"
+
+
+def test_crm_routes_block_temporary_passwords():
+    src = (HOOKS / "crm.pb.js").read_text()
+    for block in re.split(r"\nrouterAdd\(", src)[1:]:
+        path = re.match(r'"[A-Z]+",\s*"([^"]+)"', block).group(1)
+        if path.startswith("/api/crm/") and path not in {"/api/crm/status", "/api/crm/public-config", "/api/crm/google/callback"}:
+            assert "crm.requireActive(e)" in block.split("\n});", 1)[0] + block.split("\n}, $apis", 1)[0], path
+
+
+def test_crm_collection_rules_require_a_changed_password():
+    migration = (ROOT / "pb_migrations" / "1730800000_password_policy.js").read_text()
+    assert "@request.auth.must_change_password = false" in migration
+    for name in ("accounts", "contacts", "deals", "touches", "leads"):
+        assert f'"{name}"' in migration
+
+
+def test_env_example_admin_password_meets_policy():
+    pw = re.search(r"^PB_ADMIN_PASSWORD=(.*)$", (ROOT / ".env.example").read_text(), re.M).group(1)
+    assert len(pw) >= 12 and re.search(r"[A-Za-z]", pw) and re.search(r"\d", pw)
+    assert len(pw) >= 16 or re.search(r"[^A-Za-z0-9\s]", pw)

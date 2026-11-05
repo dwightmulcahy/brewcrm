@@ -1,32 +1,94 @@
 /// <reference path="../pb_data/types.d.ts" />
 // BrewCRM routes, hooks and scheduled jobs.
 
-// ---------------------------------------------------------------- bootstrap CRM user from .env
-// PB_ADMIN_EMAIL/PASSWORD create the PocketBase superuser (/_/) in the entrypoint.
-// The CRM sign-in page uses the regular "users" collection, so mirror the same
-// credentials there; .env stays the source of truth on every start.
+// ---------------------------------------------------------------- bootstrap from .env
+// 1. App settings: APP_URL (reset links), SMTP_* (reset emails), rate limits.
+// 2. CRM user mirroring PB_ADMIN_EMAIL/PASSWORD. The entrypoint creates the matching
+//    PocketBase superuser for /_/. The CRM password is only (re)applied when the .env value
+//    changes, so the user can change it in BrewCRM without a restart undoing that.
 onBootstrap((e) => {
   e.next(); // DB + collections are ready after this
+  const crm = require(`${__hooks}/lib/crm.js`);
+  try { crm.applyEnvSettings($app); } catch (err) { crm.log("ERROR", "could not apply settings from .env", err); }
+
   const email = ($os.getenv("PB_ADMIN_EMAIL") || "").replace(/\r/g, "").trim().toLowerCase();
   const password = ($os.getenv("PB_ADMIN_PASSWORD") || "").replace(/\r/g, "");
   if (!email || !password) return;
   let users;
   try { users = $app.findCollectionByNameOrId("users"); } catch (_) { return; } // first-ever migrate run
   try {
-    let user;
-    try {
-      user = $app.findAuthRecordByEmail("users", email);
-    } catch (_) {
+    const fingerprint = $security.sha256(email + "\n" + password);
+    let user = null;
+    try { user = $app.findAuthRecordByEmail("users", email); } catch (_) {}
+    if (user && crm.kvGet("bootstrap:admin_fingerprint", "") === fingerprint) return; // unchanged
+    const problems = crm.passwordProblems(password, email);
+    if (problems.length) {
+      crm.log("ERROR", "PB_ADMIN_PASSWORD is too weak for the CRM sign-in: " + problems.map((p) => (p === "EMAIL" ? "contains the email name" : "needs " + p)).join(", "));
+      return;
+    }
+    if (!user) {
       user = new Record(users);
       user.setEmail(email);
       user.set("name", "Admin");
     }
     user.setPassword(password);
     user.setVerified(true);
+    user.set("must_change_password", false); // .env is the source of truth for this account
     $app.save(user);
+    crm.kvSet("bootstrap:admin_fingerprint", fingerprint);
   } catch (err) {
-    require(`${__hooks}/lib/crm.js`).log("ERROR", "could not create CRM user from PB_ADMIN_EMAIL", err);
+    crm.log("ERROR", "could not create CRM user from PB_ADMIN_EMAIL", err);
   }
+});
+
+// ---------------------------------------------------------------- users: password policy
+// New users (only superusers can create them) start with must_change_password = true unless
+// the admin unticks it. A superuser setting someone's password makes it temporary again;
+// a user changing their own password (old password required by PocketBase) clears the flag,
+// and users can't clear it any other way.
+onRecordCreateRequest((e) => {
+  const crm = require(`${__hooks}/lib/crm.js`);
+  const body = e.requestInfo().body || {};
+  crm.assertPassword(body.password, body.email || e.record.email());
+  if (!Object.prototype.hasOwnProperty.call(body, "must_change_password")) {
+    e.record.set("must_change_password", true);
+  }
+  e.next();
+}, "users");
+
+onRecordUpdateRequest((e) => {
+  const crm = require(`${__hooks}/lib/crm.js`);
+  const body = e.requestInfo().body || {};
+  const changingPassword = typeof body.password === "string" && body.password !== "";
+  const superuser = e.hasSuperuserAuth();
+  if (changingPassword) {
+    crm.assertPassword(body.password, e.record.email());
+    if (!superuser && body.password === body.oldPassword) {
+      throw new BadRequestError("Choose a password different from the current one.");
+    }
+    if (superuser) {
+      if (!Object.prototype.hasOwnProperty.call(body, "must_change_password")) e.record.set("must_change_password", true);
+    } else {
+      e.record.set("must_change_password", false);
+    }
+  } else if (!superuser) {
+    e.record.set("must_change_password", e.record.original().getBool("must_change_password"));
+  }
+  e.next();
+}, "users");
+
+onRecordConfirmPasswordResetRequest((e) => {
+  const crm = require(`${__hooks}/lib/crm.js`);
+  const body = e.requestInfo().body || {};
+  crm.assertPassword(body.password, e.record.email());
+  e.record.set("must_change_password", false); // they chose it themselves via the emailed link
+  e.next();
+}, "users");
+
+// Public (no auth): what the sign-in page needs to know
+routerAdd("GET", "/api/crm/public-config", (e) => {
+  const crm = require(`${__hooks}/lib/crm.js`);
+  return e.json(200, { password_reset: crm.mailConfigured(), password_min: crm.PASSWORD_MIN, password_long: crm.PASSWORD_LONG });
 });
 
 // ---------------------------------------------------------------- JSON access log (stdout, for logwatch)
@@ -77,6 +139,7 @@ routerAdd("GET", "/api/crm/status", (e) => {
 // ---------------------------------------------------------------- leads
 routerAdd("POST", "/api/crm/leads/search", (e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
+  crm.requireActive(e);
   const body = e.requestInfo().body || {};
   const query = String(body.query || "").trim();
   if (query.length < 3) throw new BadRequestError("Query too short.");
@@ -85,6 +148,7 @@ routerAdd("POST", "/api/crm/leads/search", (e) => {
 
 routerAdd("POST", "/api/crm/leads/{id}/enrich", (e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
+  crm.requireActive(e);
   const lead = $app.findRecordById("leads", e.request.pathValue("id"));
   const d = crm.placeDetails(lead.getString("place_id"));
   lead.set("phone", d.nationalPhoneNumber || d.internationalPhoneNumber || "");
@@ -95,12 +159,14 @@ routerAdd("POST", "/api/crm/leads/{id}/enrich", (e) => {
 
 routerAdd("POST", "/api/crm/leads/{id}/convert", (e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
+  crm.requireActive(e);
   return e.json(200, crm.convertLead(e.request.pathValue("id"), e.auth.id));
 }, $apis.requireAuth());
 
 // ---------------------------------------------------------------- Google / Gmail
 routerAdd("GET", "/api/crm/google/auth-url", (e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
+  crm.requireActive(e);
   return e.json(200, { url: crm.googleAuthUrl(e.auth.id) });
 }, $apis.requireAuth());
 
@@ -120,6 +186,7 @@ routerAdd("GET", "/api/crm/google/callback", (e) => {
 
 routerAdd("POST", "/api/crm/google/disconnect", (e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
+  crm.requireActive(e);
   crm.kvDel("google:tokens");
   crm.kvDel("gmail:last_sync");
   return e.json(200, { ok: true });
@@ -127,17 +194,20 @@ routerAdd("POST", "/api/crm/google/disconnect", (e) => {
 
 routerAdd("POST", "/api/crm/sync/gmail", (e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
+  crm.requireActive(e);
   return e.json(200, crm.gmailSync());
 }, $apis.requireAuth());
 
 // ---------------------------------------------------------------- Loyverse POS
 routerAdd("GET", "/api/crm/pos/customers", (e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
+  crm.requireActive(e);
   return e.json(200, crm.loyverseCustomers(e.request.url.query().get("q")));
 }, $apis.requireAuth());
 
 routerAdd("POST", "/api/crm/sync/pos", (e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
+  crm.requireActive(e);
   return e.json(200, crm.loyverseSync());
 }, $apis.requireAuth());
 

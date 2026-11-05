@@ -41,6 +41,92 @@ const parseDate = (s) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
+// ---------------------------------------------------------------- passwords
+// Same rules as pb_public/app.js (passwordProblems). 12+ characters with a letter and a
+// number; a symbol is also required unless the password is 16+ characters, because the
+// admin dashboard's "Generate" button makes 20-character passwords that may have none.
+const PASSWORD_MIN = 12;
+const PASSWORD_LONG = 16;
+const PASSWORD_MAX = 71; // bcrypt limit enforced by PocketBase
+
+function passwordProblems(pw, email) {
+  pw = String(pw || "");
+  const out = [];
+  const n = Array.from(pw).length;
+  if (n < PASSWORD_MIN) out.push(`at least ${PASSWORD_MIN} characters`);
+  if (n > PASSWORD_MAX) out.push(`at most ${PASSWORD_MAX} characters`);
+  if (!/[A-Za-zÀ-ɏ]/.test(pw)) out.push("a letter");
+  if (!/[0-9]/.test(pw)) out.push("a number");
+  if (n < PASSWORD_LONG && !/[^A-Za-z0-9À-ɏ\s]/.test(pw)) {
+    out.push(`a symbol (or make it ${PASSWORD_LONG}+ characters)`);
+  }
+  const local = String(email || "").toLowerCase().split("@")[0];
+  if (local.length >= 4 && pw.toLowerCase().indexOf(local) >= 0) out.push("EMAIL");
+  return out;
+}
+
+function assertPassword(pw, email) {
+  const problems = passwordProblems(pw, email);
+  if (problems.length) {
+    const needs = problems.filter((p) => p !== "EMAIL");
+    let msg = needs.length ? "Password needs " + needs.join(", ") + "." : "";
+    if (problems.indexOf("EMAIL") >= 0) msg += (msg ? " " : "") + "It can't contain your email name.";
+    throw new BadRequestError(msg, { password: new ValidationError("validation_weak_password", msg) });
+  }
+}
+
+// CRM endpoints refuse users still on a temporary password (collections use API rules)
+function requireActive(e) {
+  if (e.auth && e.auth.collection().name === "users" && e.auth.getBool("must_change_password")) {
+    throw new ForbiddenError("Change your temporary password first.");
+  }
+}
+
+// ---------------------------------------------------------------- settings from .env
+// APP_URL feeds reset-email links; SMTP_* (if set) configures outgoing mail so reset emails
+// work without touching /_/; RATE_LIMITS=0 turns PocketBase's built-in rate limiter off.
+function applyEnvSettings(app) {
+  const s = app.settings();
+  let dirty = false;
+  const set = (obj, key, val) => { if (obj[key] !== val) { obj[key] = val; dirty = true; } };
+  const appUrl = env("APP_URL", "").replace(/\/+$/, "");
+  if (appUrl) set(s.meta, "appURL", appUrl);
+  set(s.meta, "appName", env("APP_NAME", "BrewCRM"));
+  const host = env("SMTP_HOST", "");
+  if (host) {
+    const port = parseInt(env("SMTP_PORT", "587"), 10);
+    set(s.smtp, "enabled", true);
+    set(s.smtp, "host", host);
+    set(s.smtp, "port", port);
+    set(s.smtp, "username", env("SMTP_USERNAME", ""));
+    set(s.smtp, "password", env("SMTP_PASSWORD", ""));
+    set(s.smtp, "tls", env("SMTP_TLS", port === 465 ? "true" : "false") === "true"); // implicit TLS; 587 uses STARTTLS
+    set(s.meta, "senderAddress", env("SMTP_SENDER_ADDRESS", env("SMTP_USERNAME", "")));
+    set(s.meta, "senderName", env("SMTP_SENDER_NAME", "BrewCRM"));
+  }
+  // Per client IP. Behind hotpot, set Trusted proxy > X-Real-IP or the whole team shares one IP.
+  // (PocketBase's default "*:auth" 2 per 3 s also counts token refreshes on every page load.)
+  const rules = [
+    { label: "*:authWithPassword", maxRequests: 10, duration: 60 },
+    { label: "*:requestPasswordReset", maxRequests: 3, duration: 300 },
+    { label: "*:confirmPasswordReset", maxRequests: 10, duration: 300 },
+    { label: "*:create", maxRequests: 20, duration: 5 },
+    { label: "/api/batch", maxRequests: 3, duration: 1 },
+    { label: "/api/", maxRequests: 300, duration: 10 },
+  ];
+  const current = JSON.stringify((s.rateLimits.rules || []).map((r) => [r.label, r.maxRequests, r.duration]));
+  if (current !== JSON.stringify(rules.map((r) => [r.label, r.maxRequests, r.duration]))) {
+    s.rateLimits.rules = rules;
+    dirty = true;
+  }
+  set(s.rateLimits, "enabled", env("RATE_LIMITS", "1") !== "0");
+  if (dirty) app.save(s);
+}
+
+function mailConfigured() {
+  try { return !!$app.settings().smtp.enabled; } catch (_) { return false; }
+}
+
 // ---------------------------------------------------------------- kv store
 function kvGet(key, def) {
   try {
@@ -627,6 +713,7 @@ function status() {
       configured: !!env("LOYVERSE_ACCESS_TOKEN", ""),
       last_sync: kvGet("loyverse:last_sync", 0),
     },
+    mail: { configured: mailConfigured(), sender: (() => { try { return $app.settings().meta.senderAddress; } catch (_) { return ""; } })() },
     dormant_days: parseInt(env("DORMANT_DAYS", "45"), 10),
     currency: env("CURRENCY", "CRC"),
     app_url: appUrl(),
@@ -635,6 +722,7 @@ function status() {
 
 module.exports = {
   writeJsonLine, log,
+  PASSWORD_MIN, PASSWORD_LONG, passwordProblems, assertPassword, requireActive, applyEnvSettings, mailConfigured,
   env, kvGet, kvSet, kvDel, placesSearch, placeDetails, convertLead,
   googleAuthUrl, googleCallback, gmailSync, loyverseCustomers, loyverseSync,
   dormantSweep, onTouchCreated, status, appUrl, areaFromAddress, typeFromPlace,
