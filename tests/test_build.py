@@ -21,6 +21,8 @@ def test_build_edition(tmp_path, edition):
     assert any((out / "pb_migrations").glob("*.js"))
     meta = json.loads((out / "build.json").read_text())
     assert meta["edition"] == edition
+    public = json.loads((out / "pb_public" / "version.json").read_text())
+    assert public == {"version": meta["version"], "commit": meta["commit"]}
     assert meta["pocketbase"]
     if edition == "offline":
         assert (out / "start.sh").is_file()
@@ -34,3 +36,24 @@ def test_build_edition(tmp_path, edition):
 def test_build_rejects_unknown_edition():
     r = subprocess.run(["node", "scripts/build.mjs", "bogus"], cwd=ROOT, capture_output=True)
     assert r.returncode != 0
+
+
+def _build_version(tmp_path, **env):
+    out = tmp_path / "v"
+    clean = {k: v for k, v in os.environ.items() if k not in ("APP_VERSION", "GIT_SHA")}
+    subprocess.run(["node", "scripts/build.mjs", "web"], cwd=ROOT,
+                   env={**clean, "OUT_DIR": str(out), **env}, check=True, capture_output=True)
+    return json.loads((out / "pb_public" / "version.json").read_text())
+
+
+@pytest.mark.parametrize(
+    "env, expected",
+    [
+        ({}, {"version": "dev", "commit": ""}),
+        ({"APP_VERSION": "1.4.2", "GIT_SHA": "ABCDEF0123456789"}, {"version": "1.4.2", "commit": "abcdef0"}),
+        ({"APP_VERSION": "v2.0.0-rc.1"}, {"version": "2.0.0-rc.1", "commit": ""}),
+        ({"APP_VERSION": "<script>", "GIT_SHA": "not-a-sha"}, {"version": "dev", "commit": ""}),
+    ],
+)
+def test_version_json(tmp_path, env, expected):
+    assert _build_version(tmp_path, **env) == expected

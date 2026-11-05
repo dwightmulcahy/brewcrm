@@ -4,6 +4,9 @@ FROM node:26.13.0-alpine3.24@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c7
 # release's checksums.txt. Bump PB_VERSION deliberately (not tracked by Dependabot).
 ARG PB_VERSION=0.40.6
 ARG TARGETARCH
+# Set by the release workflow (tag without "v") and CI; empty = "dev"
+ARG APP_VERSION=
+ARG GIT_SHA=
 WORKDIR /src
 RUN set -eu; \
     arch="${TARGETARCH:-amd64}"; \
@@ -20,7 +23,7 @@ COPY scripts ./scripts
 COPY pb_public ./pb_public
 COPY pb_hooks ./pb_hooks
 COPY pb_migrations ./pb_migrations
-RUN OUT_DIR=/out/app node scripts/build.mjs web
+RUN OUT_DIR=/out/app APP_VERSION="${APP_VERSION}" GIT_SHA="${GIT_SHA}" node scripts/build.mjs web
 
 FROM node:26.13.0-alpine3.24@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94
 ENV PORT=8080 TZ=UTC

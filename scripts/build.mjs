@@ -13,7 +13,11 @@ if (!['web', 'offline'].includes(edition)) {
 
 const root = path.resolve(import.meta.dirname, '..');
 const out = path.resolve(process.env.OUT_DIR ?? path.join(root, 'dist', edition));
-const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+// Release builds pass APP_VERSION (tag without "v") and GIT_SHA; anything else is a dev build.
+const semver = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const appVersion = (process.env.APP_VERSION ?? '').trim().replace(/^v/, '');
+const version = semver.test(appVersion) ? appVersion : 'dev';
+const commit = /^[0-9a-f]{7,40}$/i.test(process.env.GIT_SHA ?? '') ? process.env.GIT_SHA.slice(0, 7).toLowerCase() : '';
 const dockerfile = await readFile(path.join(root, 'Dockerfile'), 'utf8');
 const pbVersion = (dockerfile.match(/^ARG PB_VERSION=(\S+)/m) || [])[1];
 if (!pbVersion) throw new Error('PB_VERSION not found in Dockerfile');
@@ -53,6 +57,8 @@ Data is stored in \`pb_data/\`. Back it up.
 
 await writeFile(
   path.join(out, 'build.json'),
-  JSON.stringify({ edition, version: pkg.version, pocketbase: pbVersion, builtAt: new Date().toISOString() }, null, 2) + '\n',
+  JSON.stringify({ edition, version, commit, pocketbase: pbVersion, builtAt: new Date().toISOString() }, null, 2) + '\n',
 );
+// Public copy for the UI: version and commit only (no dependency versions)
+await writeFile(path.join(out, 'pb_public', 'version.json'), JSON.stringify({ version, commit }) + '\n');
 console.log(`built ${edition} -> ${path.relative(root, out) || out}`);

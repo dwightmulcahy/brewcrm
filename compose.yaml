@@ -1,7 +1,11 @@
 # Local build
 services:
   brewcrm:
-    build: .
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-}
+        GIT_SHA: ${GIT_SHA:-}
     image: ${IMAGE:-brewcrm:local}
     env_file:
       - path: .env

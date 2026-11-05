@@ -15,6 +15,15 @@ test('health endpoint', async ({ request }) => {
   expect(await res.json()).toEqual({ status: 'ok' });
 });
 
+test('build version is shown next to BrewCRM', async ({ page, request }) => {
+  const res = await request.get('/version.json');
+  expect(res.ok()).toBeTruthy();
+  const { version, commit } = await res.json();
+  const label = version === 'dev' ? `dev${commit ? ' ' + commit : ''}` : `v${version}`;
+  await page.goto('/');
+  await expect(page.locator('.login [data-build-version]')).toHaveText(label);
+});
+
 test('public sign-up is disabled', async ({ request }) => {
   const res = await request.post('/api/collections/users/records', {
     data: { email: 'intruder@example.com', password: 'x'.repeat(12), passwordConfirm: 'x'.repeat(12) },

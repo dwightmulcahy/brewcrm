@@ -104,6 +104,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ needs.verify.outputs.version }}
+            GIT_SHA=${{ github.sha }}
           provenance: mode=max
           sbom: true
           cache-from: type=gha
@@ -123,6 +126,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:offline
+        env:
+          APP_VERSION: ${{ needs.verify.outputs.version }}
+          GIT_SHA: ${{ github.sha }}
       - name: Package
         run: |
           mkdir -p out

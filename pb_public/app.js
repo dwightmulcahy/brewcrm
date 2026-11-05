@@ -117,16 +117,32 @@ async function render() {
 window.addEventListener("hashchange", render);
 
 // ---------------------------------------------------------------- login
+// ---------------------------------------------------------------- build version
+let BUILD = null;
+const buildLabel = (b) => (b.version === "dev" ? "dev" : "v" + b.version) + (b.commit && b.version === "dev" ? " " + b.commit : "");
+function showBuildVersion() {
+  if (!BUILD) return;
+  for (const el of $$("[data-build-version]")) {
+    el.textContent = buildLabel(BUILD);
+    el.title = `Version ${BUILD.version}${BUILD.commit ? ", commit " + BUILD.commit : ""}`;
+  }
+}
+fetch("version.json", { cache: "no-store" })
+  .then((r) => (r.ok ? r.json() : null))
+  .then((b) => { if (b && typeof b.version === "string") { BUILD = b; showBuildVersion(); } })
+  .catch(() => {});
+
 function renderLogin() {
   app.innerHTML = `
     <form class="login form" id="loginForm">
-      <h1>BrewCRM</h1>
+      <h1>BrewCRM <span class="build-version" data-build-version></span></h1>
       <p class="muted">Sign in with the account your admin created.</p>
       <label>Email<input name="email" type="email" autocomplete="username" required></label>
       <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
       <p id="loginErr" class="due small" hidden style="margin:0">Wrong email or password. The admin account from PB_ADMIN_EMAIL works here and at <a href="/_/">/_/</a>.</p>
       <button class="btn btn-primary" type="submit">Sign in</button>
     </form>`;
+  showBuildVersion();
   $("#loginForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const f = formData(ev.target);
