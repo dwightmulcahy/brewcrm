@@ -117,7 +117,8 @@ jobs:
     needs: [verify, validate]
     runs-on: ubuntu-latest
     env:
-      ZIP: ${{ github.event.repository.name }}-${{ github.ref_name }}-offline.zip
+      # Not "ZIP": Info-ZIP's zip reads $ZIP as extra command-line options
+      OFFLINE_ZIP: ${{ github.event.repository.name }}-${{ github.ref_name }}-offline.zip
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
@@ -132,8 +133,8 @@ jobs:
       - name: Package
         run: |
           mkdir -p out
-          (cd dist/offline && zip -rX9 "../../out/$ZIP" .)
-          (cd out && sha256sum "$ZIP" > "$ZIP.sha256" && cat "$ZIP.sha256")
+          (cd dist/offline && zip -rX9 "../../out/$OFFLINE_ZIP" .)
+          (cd out && sha256sum "$OFFLINE_ZIP" > "$OFFLINE_ZIP.sha256" && cat "$OFFLINE_ZIP.sha256")
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-assets

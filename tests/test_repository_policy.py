@@ -44,3 +44,11 @@ def test_release_publishes_protected_semver_aliases():
     for alias in ("publish_major", "publish_minor", "is_latest"):
         assert workflow.count(f"needs.verify.outputs.{alias} == 'true'") == 1
     assert "scripts/generate_release_notes.py" in workflow
+
+
+def test_workflows_do_not_set_info_zip_option_env_vars():
+    # zip/unzip read ZIP, ZIPOPT, UNZIP and UNZIPOPT as default command-line options, so a
+    # variable holding an archive name breaks every zip call in that step (v0.1.0 release).
+    pattern = re.compile(r"^\s*(ZIP|ZIPOPT|UNZIP|UNZIPOPT)\s*:", re.M)
+    for wf in (ROOT / ".github").rglob("*.yml"):
+        assert not pattern.search(wf.read_text(encoding="utf-8")), f"{wf}: rename the env var"
