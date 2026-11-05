@@ -1,0 +1,46 @@
+name: Reusable Node quality gate
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        required: false
+        default: '24'
+      install-command:
+        type: string
+        required: false
+        default: 'npm ci'
+      check-command:
+        type: string
+        required: false
+        default: 'npm test'
+      working-directory:
+        type: string
+        required: false
+        default: .
+      runner:
+        type: string
+        required: false
+        default: ubuntu-latest
+permissions:
+  contents: read
+jobs:
+  node:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: Install dependencies
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        env:
+          INSTALL_COMMAND: ${{ inputs.install-command }}
+        run: bash -euo pipefail -c "$INSTALL_COMMAND"
+      - name: Run project checks
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        env:
+          CHECK_COMMAND: ${{ inputs.check-command }}
+        run: bash -euo pipefail -c "$CHECK_COMMAND"
