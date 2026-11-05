@@ -14,7 +14,18 @@ rm -f "$DATA_DIR/.write-test"
 # Apply schema migrations
 ./pocketbase migrate up $ARGS >/dev/null
 
-# Create/refresh the admin (superuser) from .env on every start, if provided
+# Normalise admin credentials from .env: lowercase email, strip CR/whitespace (Windows-edited .env files)
+if [ -n "${PB_ADMIN_EMAIL:-}" ]; then
+  PB_ADMIN_EMAIL=$(printf '%s' "$PB_ADMIN_EMAIL" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+  export PB_ADMIN_EMAIL
+fi
+if [ -n "${PB_ADMIN_PASSWORD:-}" ]; then
+  PB_ADMIN_PASSWORD=$(printf '%s' "$PB_ADMIN_PASSWORD" | tr -d '\r')
+  export PB_ADMIN_PASSWORD
+fi
+
+# Create/refresh the admin (superuser, /_/) from .env on every start, if provided.
+# pb_hooks mirrors the same credentials into a CRM user for the main sign-in page.
 if [ -n "${PB_ADMIN_EMAIL:-}" ] && [ -n "${PB_ADMIN_PASSWORD:-}" ]; then
   ./pocketbase superuser upsert "$PB_ADMIN_EMAIL" "$PB_ADMIN_PASSWORD" --dir="$DATA_DIR" >/dev/null
 fi

@@ -124,12 +124,18 @@ function renderLogin() {
       <p class="muted">Sign in with the account your admin created.</p>
       <label>Email<input name="email" type="email" autocomplete="username" required></label>
       <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <p id="loginErr" class="due small" hidden style="margin:0">Wrong email or password. The admin account from PB_ADMIN_EMAIL works here and at <a href="/_/">/_/</a>.</p>
       <button class="btn btn-primary" type="submit">Sign in</button>
     </form>`;
   $("#loginForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const f = formData(ev.target);
-    await busy($("button", ev.target), () => pb.collection("users").authWithPassword(f.email, f.password));
+    try {
+      await busy($("button", ev.target), () => pb.collection("users").authWithPassword(f.email.toLowerCase(), f.password));
+    } catch (_) {
+      $("#loginErr").hidden = false;
+      return;
+    }
     await loadStatus();
     render();
   });

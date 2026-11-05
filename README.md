@@ -9,7 +9,7 @@
 [![Dependabot](https://img.shields.io/badge/dependabot-enabled-025e8c?logo=dependabot)](.github/dependabot.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Lightweight, self-hosted sales CRM for a small craft brewery: track visits, calls, WhatsApp, emails and tastings, run a pipeline, and find new accounts on Google Maps. Built for a QNAP NAS in Docker, reachable from the web through Cloudflare Tunnel.
+Lightweight, self-hosted sales CRM for a small craft brewery: track visits, calls, WhatsApp, emails and tastings, run a pipeline, and find new accounts on Google Maps. Built for a QNAP NAS in Docker, designed to run behind [hotpot](https://github.com/dwightmulcahy/hotpot) with [logwatch](https://github.com/dwightmulcahy/logwatch) reports.
 
 - **Pipeline** board: Prospect → Contacted → Sampling → Proposal → First order → Recurring → Dormant / Lost
 - **Activity log**: visits, calls, WhatsApp, email, tastings, events, orders, with follow-up dates
@@ -36,7 +36,9 @@ docker compose up -d --build
 curl http://localhost:8080/health
 ```
 
-Open `http://localhost:8080/_/` (admin) → **Collections → users → New record** for each salesperson. Public sign-up is disabled. Sales users sign in at `http://localhost:8080/`.
+Sign in at `http://localhost:8080/` with `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD`. The same credentials open the admin dashboard at `/_/` (type the email in lowercase there). They are re-applied from `.env` on every start, so change the password in `.env`, not in the UI.
+
+Add salespeople in `/_/` → **Collections → users → New record**. Public sign-up is disabled.
 
 Both Compose files run with a read-only root filesystem, dropped capabilities, `no-new-privileges`, bounded memory/PIDs, an init process, a graceful shutdown window, and rotated JSON logs. The app runs as uid 1000 and writes only to `/data`.
 
@@ -53,24 +55,39 @@ Both Compose files run with a read-only root filesystem, dropped capabilities, `
    ```sh
    cd /share/Container/brewcrm
    docker compose -f compose.qnap.yaml pull
-   docker compose -f compose.qnap.yaml --profile tunnel up -d   # omit --profile tunnel for LAN only
+   docker compose -f compose.qnap.yaml up -d
    ```
    Or Container Station → Applications → Create → paste `compose.qnap.yaml`.
 5. Open `http://<nas-ip>:8080/_/`.
 
 Upgrade: bump the tag in `IMAGE` (or keep `:latest`), then `pull` + `up -d`. Data in `QNAP_DATA_DIR` survives upgrades.
 
-## Web access: Cloudflare Tunnel (free)
+## Behind hotpot and logwatch
 
-No port forwarding, works behind ISP CGNAT, HTTPS automatic.
+[hotpot](https://github.com/dwightmulcahy/hotpot) is the only thing exposed to the internet; BrewCRM stays on the Docker network. [logwatch](https://github.com/dwightmulcahy/logwatch) reads BrewCRM's container logs nightly.
 
-1. Add your domain to Cloudflare (free plan).
-2. Zero Trust → Networks → Tunnels → **Create tunnel** (Cloudflared) → copy the token into `CLOUDFLARE_TUNNEL_TOKEN`.
-3. Public hostname: `crm.yourdomain.com` → Service `HTTP` → `brewcrm:8080`.
-4. Set `APP_URL=https://crm.yourdomain.com`; start with `--profile tunnel`.
-5. **Recommended:** Zero Trust → Access → Applications → add `crm.yourdomain.com/_/*` with a policy allowing only your email, putting a second login in front of the admin dashboard.
-   Do **not** put an Access policy on `/api/crm/google/callback`, or the Gmail connection will fail.
-6. Admin → Settings → Application → Trusted proxy → **Trusted IP proxy headers**: `CF-Connecting-IP`.
+```text
+Internet -> host port -> hotpot -> http://brewcrm:8080
+                                       ^
+                logwatch (TARGET_CONTAINER=brewcrm) reads docker logs
+```
+
+1. In `compose.qnap.yaml`, replace the `ports:` block of `brewcrm` with `expose: ["8080"]` and attach it to hotpot's network, so nobody can reach BrewCRM without going through hotpot:
+   ```yaml
+   services:
+     brewcrm:
+       expose: ["8080"]
+       networks: [hotpot_backend]
+   networks:
+     hotpot_backend:
+       external: true   # created by the hotpot stack
+   ```
+2. hotpot: `HOTPOT_UPSTREAM=http://brewcrm:8080`, publish the public port on hotpot.
+3. BrewCRM admin (`/_/`) → Settings → Application → Trusted proxy → **Trusted IP proxy headers**: `X-Real-IP`. Without this, every visitor is logged as hotpot's IP. Only do this when step 1 is in place.
+4. Set `APP_URL` to the public URL users open (it's used for the Gmail OAuth redirect).
+5. logwatch: `TARGET_CONTAINER=brewcrm`, `APP_NAME=BrewCRM`.
+
+BrewCRM writes one JSON line per request to stdout in logwatch's format (`timestamp`, `level`, `method`, `path`, `status_code`, `duration_ms`, `client`, `user_agent`). `/health` probes are included for logwatch's uptime and latency checks. PocketBase prints three plain-text "Server started" lines on each container start; those are the only non-JSON lines. Set `ACCESS_LOG=0` to turn the access log off.
 
 Do not expose QTS admin ports to the internet.
 

@@ -1,6 +1,74 @@
 /// <reference path="../pb_data/types.d.ts" />
 // BrewCRM routes, hooks and scheduled jobs.
 
+// ---------------------------------------------------------------- bootstrap CRM user from .env
+// PB_ADMIN_EMAIL/PASSWORD create the PocketBase superuser (/_/) in the entrypoint.
+// The CRM sign-in page uses the regular "users" collection, so mirror the same
+// credentials there; .env stays the source of truth on every start.
+onBootstrap((e) => {
+  e.next(); // DB + collections are ready after this
+  const email = ($os.getenv("PB_ADMIN_EMAIL") || "").replace(/\r/g, "").trim().toLowerCase();
+  const password = ($os.getenv("PB_ADMIN_PASSWORD") || "").replace(/\r/g, "");
+  if (!email || !password) return;
+  let users;
+  try { users = $app.findCollectionByNameOrId("users"); } catch (_) { return; } // first-ever migrate run
+  try {
+    let user;
+    try {
+      user = $app.findAuthRecordByEmail("users", email);
+    } catch (_) {
+      user = new Record(users);
+      user.setEmail(email);
+      user.set("name", "Admin");
+    }
+    user.setPassword(password);
+    user.setVerified(true);
+    $app.save(user);
+  } catch (err) {
+    console.log("could not create CRM user from PB_ADMIN_EMAIL:", err);
+  }
+});
+
+// ---------------------------------------------------------------- JSON access log (stdout, for logwatch)
+// One JSON object per request; set ACCESS_LOG=0 to disable. Behind hotpot, the real client IP
+// comes from X-Real-IP once Settings > Application > Trusted proxy lists that header.
+routerUse((e) => {
+  if ($os.getenv("ACCESS_LOG") === "0") return e.next();
+  const started = Date.now();
+  let status = 0, failure = null;
+  try {
+    e.next();
+  } catch (err) {
+    failure = err;
+    // thrown Go ApiErrors are wrapped: the HTTP status lives on err.value
+    status = (err && err.value && err.value.status) || (err && err.status) || 500;
+  }
+  try {
+    if (!status) status = e.status() || 200;
+    const path = e.request.url.path;
+    const line = {
+      timestamp: new Date().toISOString(),
+      level: status >= 500 ? "ERROR" : status >= 400 ? "WARNING" : "INFO",
+      method: e.request.method,
+      path: path,
+      status_code: status,
+      duration_ms: Date.now() - started,
+      client: e.realIP(),
+      user_agent: e.request.header.get("User-Agent") || "",
+      api_key: null,
+    };
+    // Docker stdout is a pipe: write raw (console.log adds a timestamp prefix, breaking
+    // one-JSON-object-per-line). writeFile truncates, which only matters for regular files,
+    // so fall back to console.log when stdout is redirected to a file.
+    const json = JSON.stringify(line);
+    let raw = false;
+    try { raw = !$os.stat("/dev/stdout").mode().isRegular(); } catch (_) {}
+    if (raw) $os.writeFile("/dev/stdout", json + "\n", 0o644);
+    else console.log(json);
+  } catch (_) {}
+  if (failure) throw failure;
+});
+
 // ---------------------------------------------------------------- health (container/CI probe)
 routerAdd("GET", "/health", (e) => {
   $app.countRecords("kv"); // touches the DB so a broken data dir fails the probe
