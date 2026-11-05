@@ -56,7 +56,7 @@ test('Loyverse: link a customer, import orders, unlink, manual sync', async ({ p
   await dlg.getByPlaceholder('Search by name, email, phone or code').press('Enter');
   await expect(dlg.locator('.item')).toContainText('B01 · owner@esquina.cr · +506 8888 1234 · 4 visits');
   await dlg.getByRole('button', { name: 'Link' }).click();
-  await expect(page.getByText('Linked')).toBeVisible();
+  await expect(page.locator('dd', { hasText: 'Linked' })).toBeVisible();
   await expect(page.locator('.kv')).toContainText('2 ·');
   const order = page.locator('.timeline li', { hasText: '1-1001' });
   await expect(order).toContainText('1× Keg IPA (20L)');
