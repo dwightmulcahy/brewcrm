@@ -40,6 +40,8 @@ Sign in at `http://localhost:8080/` with `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD`.
 
 Add salespeople in `/_/` → **Collections → users → New record**. Public sign-up is disabled.
 
+The version next to "BrewCRM" is the release tag (e.g. `v1.2.0`) for published images, or `dev` for local builds. To include the commit in a local build: `GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build`.
+
 Both Compose files run with a read-only root filesystem, dropped capabilities, `no-new-privileges`, bounded memory/PIDs, an init process, a graceful shutdown window, and rotated JSON logs. The app runs as uid 1000 and writes only to `/data`.
 
 ## QNAP (TS-453, x86_64)
