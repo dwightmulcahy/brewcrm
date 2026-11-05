@@ -77,6 +77,12 @@ function formData(form) {
 
 const options = (pairs, sel) => pairs.map(([v, l]) => `<option value="${esc(v)}" ${v === sel ? "selected" : ""}>${esc(l)}</option>`).join("");
 
+// Missing .env setting: same red callout everywhere
+function envWarning(vars, purpose) {
+  const names = vars.map((v) => `<code>${esc(v)}</code>`).join(vars.length === 2 ? " and " : ", ");
+  return `<div class="env-warn" role="alert"><strong>Not set up.</strong> Add ${names} to <code>.env</code> and restart the container to ${esc(purpose)}.</div>`;
+}
+
 // ---------------------------------------------------------------- dialog
 function openDialog(html, onSubmit) {
   const dlg = $("#dlg");
@@ -622,7 +628,7 @@ route("leads", async (_, qs) => {
       <div><h1>Leads</h1><p>Find bars, restaurants and shops near you on Google Maps, then turn the good ones into accounts.</p></div>
     </div>
     <section class="panel" style="margin-bottom:16px">
-      ${p.configured ? "" : `<p class="due" style="margin-top:0">Add GOOGLE_PLACES_API_KEY to your .env to enable search.</p>`}
+      ${p.configured ? "" : envWarning(["GOOGLE_PLACES_API_KEY"], "search Google Maps for leads")}
       <form id="lsForm" class="form">
         <div class="grid-2">
           <label>What<input id="lsWhat" placeholder="bar, restaurante, licorera…" required></label>
@@ -718,13 +724,20 @@ route("settings", async (_, qs) => {
   const g = qs.get("google");
   if (g) { toast(g === "connected" ? "Gmail connected" : "Gmail: " + g, g !== "connected"); history.replaceState(null, "", "#/settings"); }
   const ago = (ms) => (ms ? new Date(ms).toLocaleString() : "never");
+  const missing = [
+    !s.google?.configured && "Gmail",
+    !s.pos?.configured && "Loyverse POS",
+    !s.places?.configured && "Google Maps lead search",
+  ].filter(Boolean);
+  const setupClass = (ok) => (ok ? "panel" : "panel needs-setup");
   app.innerHTML = `
     <div class="page-head"><div><h1>Settings</h1><p>Signed in as ${esc(pb.authStore.record?.email || "")}</p></div>
       <button class="btn" id="logout">Sign out</button></div>
+    ${missing.length ? `<div class="env-warn env-warn-summary" role="alert"><strong>${missing.length} ${missing.length === 1 ? "integration needs" : "integrations need"} setup:</strong> ${esc(missing.join(", "))}. Each one is marked below.</div>` : ""}
     <div class="grid-2" style="align-items:start">
-      <section class="panel">
+      <section class="${setupClass(s.google?.configured)}">
         <h3>Gmail</h3>
-        ${!s.google?.configured ? `<p class="due">Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env first.</p>` : ""}
+        ${s.google?.configured ? "" : envWarning(["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"], "log emails with your contacts")}
         <p>${s.google?.connected ? `Connected as <strong>${esc(s.google.email)}</strong>. Emails to and from your contacts are logged every 15 minutes.` : "Not connected. Connect to log emails with your contacts automatically (read-only access)."}</p>
         <p class="small muted">Last sync: ${esc(ago(s.google?.last_sync))}</p>
         <div class="row">
@@ -733,15 +746,15 @@ route("settings", async (_, qs) => {
             : `<button class="btn btn-primary" id="gConn" ${s.google?.configured ? "" : "disabled"}>Connect Gmail</button>`}
         </div>
       </section>
-      <section class="panel">
+      <section class="${setupClass(s.pos?.configured)}">
         <h3>Loyverse POS</h3>
-        <p>${s.pos?.configured ? "Configured. Receipts for linked accounts sync every hour." : "Set LOYVERSE_ACCESS_TOKEN in .env to pull order history."}</p>
+        ${s.pos?.configured ? `<p>Configured. Receipts for linked accounts sync every hour.</p>` : envWarning(["LOYVERSE_ACCESS_TOKEN"], "pull order history")}
         <p class="small muted">Last sync: ${esc(ago(s.pos?.last_sync))} · Deals go dormant after ${s.dormant_days} days without an order.</p>
         <button class="btn" id="sqSync" ${s.pos?.configured ? "" : "disabled"}>Sync now</button>
       </section>
-      <section class="panel">
+      <section class="${setupClass(s.places?.configured)}">
         <h3>Google Maps lead search</h3>
-        <p>${s.places?.configured ? "Configured." : "Set GOOGLE_PLACES_API_KEY in .env."}</p>
+        ${s.places?.configured ? `<p>Configured.</p>` : envWarning(["GOOGLE_PLACES_API_KEY"], "search Google Maps for leads")}
         <p class="small">Searches this month: ${s.places?.search_used} of ${s.places?.search_limit}<br>Phone lookups this month: ${s.places?.details_used} of ${s.places?.details_limit}</p>
         <p class="small muted">Caps stay below Google's free monthly allowance. Change them in .env.</p>
       </section>

@@ -114,8 +114,15 @@ test('sales user signs in, adds an account and logs a visit', async ({ page }) =
   await page.goto('/#/followups');
   await expect(page.locator('.list').first()).toContainText('Smoke Test Bar');
 
+  // All stages fit the viewport (they wrap; no horizontal scrolling)
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+
   await page.goto('/#/settings');
   await expect(page.getByRole('heading', { name: 'Loyverse POS' })).toBeVisible();
+  // CI configures no integrations: every one gets the same red warning, plus a summary
+  await expect(page.locator('.panel.needs-setup .env-warn')).toHaveCount(3);
+  await expect(page.locator('.env-warn-summary')).toContainText('3 integrations need setup');
 
   expect(errors).toEqual([]);
 });
