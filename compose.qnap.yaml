@@ -1,6 +1,7 @@
 # QNAP Container Station: pulls the published image (no local build)
+# Web access via Cloudflare Tunnel: docker compose -f compose.qnap.yaml --profile tunnel up -d
 services:
-  app:
+  brewcrm:
     image: ${IMAGE:?set IMAGE in .env}
     env_file:
       - path: .env
@@ -8,7 +9,7 @@ services:
     ports:
       - "${HOST_PORT:-8080}:8080"
     volumes:
-      - ${QNAP_DATA_DIR:-/share/Container/app/data}:/data
+      - ${QNAP_DATA_DIR:-/share/Container/brewcrm/data}:/data
     init: true
     read_only: true
     tmpfs:
@@ -20,6 +21,23 @@ services:
     shm_size: 64m
     stop_signal: SIGTERM
     stop_grace_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7
+    profiles: [tunnel]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on: [brewcrm]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 100
+    mem_limit: 128m
     restart: unless-stopped
     logging:
       driver: json-file

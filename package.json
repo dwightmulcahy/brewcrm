@@ -1,17 +1,19 @@
 {
-  "name": "project-name",
+  "name": "brewcrm",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build:web": "node scripts/build.mjs web",
     "build:offline": "node scripts/build.mjs offline",
-    "start": "node server.mjs",
     "test:smoke": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0"
-  }
+  },
+  "description": "Lightweight self-hosted sales CRM for small craft breweries"
 }

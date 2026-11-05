@@ -1,12 +1,15 @@
+# Local build. Web access via Cloudflare Tunnel: docker compose --profile tunnel up -d
 services:
-  app:
+  brewcrm:
     build: .
-    image: ${IMAGE:-app:local}
+    image: ${IMAGE:-brewcrm:local}
     env_file:
       - path: .env
         required: false
     ports:
       - "${HOST_PORT:-8080}:8080"
+    volumes:
+      - brewcrm-data:/data
     init: true
     read_only: true
     tmpfs:
@@ -22,3 +25,23 @@ services:
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7
+    profiles: [tunnel]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on: [brewcrm]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 100
+    mem_limit: 128m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  brewcrm-data:

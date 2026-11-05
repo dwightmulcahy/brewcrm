@@ -19,6 +19,9 @@ env:
   PYTHON_VERSION: "3.13"
   IMAGE: app:ci
   PORT: "8080"
+  # Throwaway credentials for the ephemeral smoke-test container only
+  SMOKE_ADMIN_EMAIL: smoke-admin@example.com
+  SMOKE_ADMIN_PASSWORD: smoke-only-password-123
 
 jobs:
   syntax:
@@ -102,7 +105,8 @@ jobs:
       - name: Start hardened container
         run: |
           docker run -d --name app -p ${PORT}:8080 \
-            --read-only --tmpfs /tmp \
+            --read-only --tmpfs /tmp --tmpfs /data:rw,uid=1000,gid=1000,size=64m \
+            -e PB_ADMIN_EMAIL="$SMOKE_ADMIN_EMAIL" -e PB_ADMIN_PASSWORD="$SMOKE_ADMIN_PASSWORD" \
             --cap-drop ALL --security-opt no-new-privileges:true \
             --pids-limit 200 --memory 256m \
             "$IMAGE"
@@ -123,6 +127,8 @@ jobs:
         run: npm run test:smoke
         env:
           BASE_URL: http://localhost:${{ env.PORT }}
+          PB_ADMIN_EMAIL: ${{ env.SMOKE_ADMIN_EMAIL }}
+          PB_ADMIN_PASSWORD: ${{ env.SMOKE_ADMIN_PASSWORD }}
       - name: Scan image for fixable high and critical vulnerabilities
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:

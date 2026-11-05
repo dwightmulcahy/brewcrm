@@ -8,7 +8,7 @@ upgrade to the newest semantic-versioned release before reporting a problem.
 ## Reporting a vulnerability
 
 Use the repository's private vulnerability reporting form at
-`https://github.com/OWNER/REPO/security/advisories/new`. If private reporting
+`https://github.com/dwightmulcahy/brewcrm/security/advisories/new`. If private reporting
 is unavailable, open an issue requesting a private contact channel without
 including exploit details, credentials, tokens, private URLs, or screenshots.
 

@@ -1,4 +1,8 @@
 *
+!package.json
+!Dockerfile
+!docker-entrypoint.sh
 !scripts/
-!src/
-!server.mjs
+!pb_public/
+!pb_hooks/
+!pb_migrations/

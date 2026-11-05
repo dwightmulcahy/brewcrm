@@ -41,3 +41,7 @@ Thumbs.db
 # Logs
 logs/
 *.log
+
+# PocketBase data (local runs)
+pb_data/
+.ruff_cache/
