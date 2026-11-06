@@ -6,7 +6,7 @@ test('sign-in errors, then empty states everywhere', async ({ page }) => {
   await expect(page.locator('#loginErr')).toBeVisible();
   await expect(page.locator('#loginErr')).toContainText('Wrong email or password');
 
-  await page.getByLabel('Password').fill(E2E.admin.password);
+  await page.getByLabel('Password', { exact: true }).fill(E2E.admin.password);
   await page.getByLabel('Email').fill(E2E.admin.email.toUpperCase());
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();

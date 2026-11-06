@@ -12,22 +12,22 @@ test('first sign-in with a temporary password forces a change', async ({ page, a
   await expect(page.locator('.pw-rules li:not(.ok)')).toContainText(['At least 12 characters', 'A number']);
   await newPw.fill('rosa.e2e-short-pass');
   await expect(page.locator('.pw-rules li:not(.ok)')).toHaveText(["• Doesn't contain your email name"]);
-  await page.getByLabel('Temporary password').fill('Kq7vT2mXpL9wR4nZbH6c');
-  await page.getByLabel('Confirm new password').fill('rosa.e2e-short-pass');
+  await page.getByLabel('Temporary password', { exact: true }).fill('Kq7vT2mXpL9wR4nZbH6c');
+  await page.getByLabel('Confirm new password', { exact: true }).fill('rosa.e2e-short-pass');
   await page.getByRole('button', { name: 'Save password' }).click();
   await expect(toast(page)).toHaveText("Password needs: doesn't contain your email name");
   await expect(newPw).toBeFocused();
   await newPw.fill('Cerveza-fria-2026');
-  await page.getByLabel('Confirm new password').fill('Cerveza-fria-2027');
+  await page.getByLabel('Confirm new password', { exact: true }).fill('Cerveza-fria-2027');
   await expect(page.locator('[data-pw-mismatch]')).toBeVisible();
   await page.getByRole('button', { name: 'Save password' }).click();
-  await expect(page.getByLabel('Confirm new password')).toBeFocused();
-  await page.getByLabel('Confirm new password').fill('Cerveza-fria-2026');
+  await expect(page.getByLabel('Confirm new password', { exact: true })).toBeFocused();
+  await page.getByLabel('Confirm new password', { exact: true }).fill('Cerveza-fria-2026');
   await expect(page.locator('[data-pw-mismatch]')).toBeHidden();
-  await page.getByLabel('Temporary password').fill('wrong-temporary-1!');
+  await page.getByLabel('Temporary password', { exact: true }).fill('wrong-temporary-1!');
   await page.getByRole('button', { name: 'Save password' }).click();
   await expect(toast(page)).toHaveClass(/err/);
-  await page.getByLabel('Temporary password').fill('Kq7vT2mXpL9wR4nZbH6c');
+  await page.getByLabel('Temporary password', { exact: true }).fill('Kq7vT2mXpL9wR4nZbH6c');
   await page.getByRole('button', { name: 'Save password' }).click();
   await expect(toast(page)).toHaveText('Password saved');
   await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();
@@ -46,15 +46,15 @@ test('change your own password in Settings', async ({ page, api }) => {
   await signIn(page, 'sofia.e2e@brewery.cr', 'Start-pass-2026!x');
   await page.getByRole('link', { name: 'Settings' }).click();
   const form = page.locator('#pwForm');
-  await form.getByLabel('Current password').fill('Start-pass-2026!x');
+  await form.getByLabel('Current password', { exact: true }).fill('Start-pass-2026!x');
   await form.getByLabel('New password', { exact: true }).fill('Next-pass-2026!y');
-  await form.getByLabel('Confirm new password').fill('Next-pass-2026!z');
+  await form.getByLabel('Confirm new password', { exact: true }).fill('Next-pass-2026!z');
   await form.getByRole('button', { name: 'Change password' }).click();
   await expect(form.locator('[data-pw-mismatch]')).toBeVisible();
-  await form.getByLabel('Confirm new password').fill('Next-pass-2026!y');
+  await form.getByLabel('Confirm new password', { exact: true }).fill('Next-pass-2026!y');
   await form.getByRole('button', { name: 'Change password' }).click();
   await expect(toast(page)).toHaveText('Password changed');
-  await expect(form.getByLabel('Current password')).toHaveValue('');
+  await expect(form.getByLabel('Current password', { exact: true })).toHaveValue('');
   await expect(form.locator('.pw-rules li.ok')).toHaveCount(1);
   await page.getByRole('button', { name: 'Sign out' }).click();
   await signIn(page, 'sofia.e2e@brewery.cr', 'Next-pass-2026!y');
@@ -103,7 +103,7 @@ test('reset page: missing, expired and valid tokens', async ({ page }) => {
   await page.goto('/#/reset/not-a-jwt');
   await expect(page.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
   await page.getByLabel('New password', { exact: true }).fill('Brand-new-pass-2026');
-  await page.getByLabel('Confirm new password').fill('Brand-new-pass-2026');
+  await page.getByLabel('Confirm new password', { exact: true }).fill('Brand-new-pass-2026');
   await page.getByRole('button', { name: 'Save new password' }).click();
   await expect(toast(page)).toHaveText('This reset link has expired or was already used. Request a new one.');
 
@@ -111,11 +111,11 @@ test('reset page: missing, expired and valid tokens', async ({ page }) => {
   await page.goto(`/#/reset/${fakeToken('maria@brewery.cr')}`);
   await expect(page.locator('.login')).toContainText('For maria@brewery.cr');
   await page.getByLabel('New password', { exact: true }).fill('weak');
-  await page.getByLabel('Confirm new password').fill('weak');
+  await page.getByLabel('Confirm new password', { exact: true }).fill('weak');
   await page.getByRole('button', { name: 'Save new password' }).click();
   await expect(toast(page)).toContainText('Password needs: at least 12 characters, a number');
   await page.getByLabel('New password', { exact: true }).fill('Brand-new-pass-2026');
-  await page.getByLabel('Confirm new password').fill('Brand-new-pass-2026');
+  await page.getByLabel('Confirm new password', { exact: true }).fill('Brand-new-pass-2026');
   await page.getByRole('button', { name: 'Save new password' }).click();
   await expect(toast(page)).toHaveText('Something else.');
 
@@ -132,4 +132,33 @@ test('the .env admin is never forced to change and keeps working', async ({ page
   await expect(page.getByText('Choose your password')).toHaveCount(0);
   await page.getByRole('link', { name: 'Settings' }).click();
   await expect(page.getByText(`Signed in as ${E2E.admin.email}`)).toBeVisible();
+});
+
+test('password fields have a Show/Hide toggle that resets after saving', async ({ page, api }) => {
+  await page.goto('/');
+  const signInPw = page.getByLabel('Password', { exact: true });
+  await signInPw.fill('secret-value-1');
+  await page.getByRole('button', { name: 'Show password' }).click();
+  await expect(signInPw).toHaveAttribute('type', 'text');
+  await expect(signInPw).toBeFocused();
+  await page.getByRole('button', { name: 'Hide password' }).click();
+  await expect(signInPw).toHaveAttribute('type', 'password');
+
+  await api.newUser('toggle.e2e@brewery.cr', 'Start-pass-2026!t', { must_change_password: false });
+  await signIn(page, 'toggle.e2e@brewery.cr', 'Start-pass-2026!t');
+  await page.getByRole('link', { name: 'Settings' }).click();
+  const form = page.locator('#pwForm');
+  for (const name of ['current password', 'new password', 'confirm new password']) {
+    await form.getByRole('button', { name: `Show ${name}`, exact: true }).click();
+    const btn = form.getByRole('button', { name: `Hide ${name}`, exact: true });
+    await expect(btn).toHaveAttribute('aria-pressed', 'true');
+    await expect(btn).toHaveText('Hide');
+  }
+  await expect(form.locator('input[type=password]')).toHaveCount(0);
+  await form.getByLabel('Current password', { exact: true }).fill('Start-pass-2026!t');
+  await form.getByLabel('New password', { exact: true }).fill('Next-pass-2026!u');
+  await form.getByLabel('Confirm new password', { exact: true }).fill('Next-pass-2026!u');
+  await form.getByRole('button', { name: 'Change password' }).click();
+  await expect(toast(page)).toHaveText('Password changed');
+  await expect(form.locator('input[type=password]')).toHaveCount(3);
 });
