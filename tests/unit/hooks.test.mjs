@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import { createRuntime, requestEvent, authUser, Record, BadRequestError, ForbiddenError } from './pbfake.mjs';
+import path from 'node:path';
+import { createRuntime, requestEvent, authUser, Record, BadRequestError, ForbiddenError, HOOKS as HOOKS_DIR } from './pbfake.mjs';
 
 function boot(env = {}, routes = []) {
   const rt = createRuntime({ env, routes });
@@ -190,9 +191,29 @@ describe('routes', () => {
     const { route, rt, reg } = boot();
     const flagged = authUser(rt.app, { must_change_password: true });
     assert.strictEqual(route('GET', '/api/crm/status').handler(requestEvent({ auth: flagged })).status, 200);
-    const guarded = reg.routes.filter((r) => r.path.startsWith('/api/crm/') && !['/api/crm/status', '/api/crm/public-config', '/api/crm/google/callback'].includes(r.path));
+    const guarded = reg.routes.filter((r) => r.path.startsWith('/api/crm/') && !['/api/crm/status', '/api/crm/build', '/api/crm/public-config', '/api/crm/google/callback'].includes(r.path));
     assert.strictEqual(guarded.length, 8);
     for (const r of guarded) assert.throws(() => r.handler(requestEvent({ auth: flagged })), ForbiddenError, r.path);
+  });
+
+  test('build info: build.json fields + server start time; tolerates missing/garbled files', () => {
+    const buildJson = path.resolve(HOOKS_DIR, '..', 'build.json');
+    const rt = createRuntime({ files: { [buildJson]: JSON.stringify({ edition: 'web', version: '1.2.0', commit: 'abc1234', pocketbase: '0.40.6', builtAt: '2026-11-06T10:00:00.000Z' }) } });
+    const reg = rt.loadHooks();
+    reg.bootstrap[0]({ next() {} });
+    const get = () => reg.routes.find((r) => r.path === '/api/crm/build').handler(requestEvent({ auth: authUser(rt.app) })).body;
+    const info = get();
+    assert.match(info.started_at, /^\d{4}-\d\d-\d\dT/);
+    assert.deepEqual({ ...info, started_at: '' }, { version: '1.2.0', commit: 'abc1234', edition: 'web', pocketbase: '0.40.6', built_at: '2026-11-06T10:00:00.000Z', started_at: '' });
+    for (const raw of [undefined, 'not json', 'null', JSON.stringify({ version: 7, commit: 1, edition: [], pocketbase: {}, builtAt: 0 })]) {
+      const r2 = createRuntime({ files: raw === undefined ? {} : { [buildJson]: raw } });
+      const info2 = r2.lib().buildInfo();
+      assert.deepEqual(info2, { version: 'dev', commit: '', edition: '', pocketbase: '', built_at: '', started_at: '' });
+    }
+    const r3 = createRuntime();
+    r3.app.store = () => { throw new Error('no store'); };
+    assert.doesNotThrow(() => r3.lib().markStarted());
+    assert.strictEqual(r3.lib().buildInfo().started_at, '');
   });
 
   test('leads: search, enrich, convert', () => {

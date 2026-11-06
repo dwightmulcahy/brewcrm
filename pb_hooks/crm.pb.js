@@ -9,6 +9,7 @@
 onBootstrap((e) => {
   e.next(); // DB + collections are ready after this
   const crm = require(`${__hooks}/lib/crm.js`);
+  crm.markStarted();
   try { crm.applyEnvSettings($app); } catch (err) { crm.log("ERROR", "could not apply settings from .env", err); }
 
   const email = ($os.getenv("PB_ADMIN_EMAIL") || "").replace(/\r/g, "").trim().toLowerCase();
@@ -134,6 +135,11 @@ routerAdd("GET", "/health", (e) => {
 routerAdd("GET", "/api/crm/status", (e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
   return e.json(200, crm.status());
+}, $apis.requireAuth());
+
+routerAdd("GET", "/api/crm/build", (e) => {
+  const crm = require(`${__hooks}/lib/crm.js`);
+  return e.json(200, crm.buildInfo());
 }, $apis.requireAuth());
 
 // ---------------------------------------------------------------- leads

@@ -50,9 +50,19 @@ h3 { font-size: 19px; }
   background: var(--hop); color: var(--hop-ink);
 }
 .brand { font: 700 24px var(--display); color: var(--hop-ink); text-decoration: none; letter-spacing: .5px; white-space: nowrap; }
-.build-version { font: 500 13px var(--body); letter-spacing: 0; opacity: .75; vertical-align: middle; }
-.build-version:empty { display: none; }
-.login .build-version { color: var(--ink-2); opacity: 1; }
+.brand-wrap { display: flex; align-items: center; gap: 8px; }
+.build-version {
+  font: 500 13px var(--body); letter-spacing: 0; vertical-align: middle; cursor: pointer;
+  color: inherit; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25);
+  border-radius: 999px; padding: 2px 9px; min-height: 24px;
+}
+.build-version:hover, .build-version:focus-visible { background: rgba(255,255,255,.24); }
+.build-version[hidden], .build-version:empty { display: none; }
+.login .build-version { color: var(--ink-2); background: transparent; border-color: var(--line); }
+.login .build-version:hover, .login .build-version:focus-visible { background: var(--line); }
+.about h2 { display: flex; align-items: center; gap: 10px; }
+.about .kv { grid-template-columns: 130px 1fr; margin-bottom: 12px; }
+.about-links { font-size: 14px; margin: 0 0 12px; }
 .nav { display: flex; gap: 4px; flex: 1; }
 .nav a {
   color: #DCE8E0; text-decoration: none; padding: 6px 12px; border-radius: var(--r-sm);
