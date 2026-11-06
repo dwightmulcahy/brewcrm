@@ -21,6 +21,8 @@ def test_base_images_are_versioned_and_digest_pinned():
     images = re.findall(r"^FROM\s+(\S+)", dockerfile, re.MULTILINE)
     assert images
     for image in images:
+        if image == "scratch":  # empty built-in stage, nothing to pin
+            continue
         assert re.fullmatch(r"[^:]+:[^@]+@sha256:[0-9a-f]{64}", image)
 
 

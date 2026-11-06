@@ -3,6 +3,9 @@ services:
   brewcrm:
     build:
       context: .
+      # Local builds read the commit from .git so the UI shows "dev <commit>"
+      additional_contexts:
+        git: ./.git
       args:
         APP_VERSION: ${APP_VERSION:-}
         GIT_SHA: ${GIT_SHA:-}

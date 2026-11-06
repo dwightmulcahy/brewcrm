@@ -1,4 +1,7 @@
 # syntax=docker/dockerfile:1
+# Empty unless compose.yaml supplies the checkout's .git as the "git" build context
+FROM scratch AS git
+
 FROM node:26.13.0-alpine3.24@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS build
 # PocketBase is fetched from the official GitHub release and verified against the
 # release's checksums.txt. Bump PB_VERSION deliberately (not tracked by Dependabot).
@@ -23,7 +26,8 @@ COPY scripts ./scripts
 COPY pb_public ./pb_public
 COPY pb_hooks ./pb_hooks
 COPY pb_migrations ./pb_migrations
-RUN OUT_DIR=/out/app APP_VERSION="${APP_VERSION}" GIT_SHA="${GIT_SHA}" node scripts/build.mjs web
+RUN --mount=type=bind,from=git,target=/git \
+    OUT_DIR=/out/app APP_VERSION="${APP_VERSION}" GIT_SHA="${GIT_SHA}" GIT_DIR=/git node scripts/build.mjs web
 
 FROM node:26.13.0-alpine3.24@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94
 ENV PORT=8080 TZ=UTC
