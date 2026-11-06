@@ -191,8 +191,8 @@ describe('routes', () => {
     const { route, rt, reg } = boot();
     const flagged = authUser(rt.app, { must_change_password: true });
     assert.strictEqual(route('GET', '/api/crm/status').handler(requestEvent({ auth: flagged })).status, 200);
-    const guarded = reg.routes.filter((r) => r.path.startsWith('/api/crm/') && !['/api/crm/status', '/api/crm/build', '/api/crm/public-config', '/api/crm/google/callback'].includes(r.path));
-    assert.strictEqual(guarded.length, 8);
+    const guarded = reg.routes.filter((r) => r.path.startsWith('/api/crm/') && !['/api/crm/status', '/api/crm/public-config', '/api/crm/google/callback'].includes(r.path));
+    assert.strictEqual(guarded.length, 9);
     for (const r of guarded) assert.throws(() => r.handler(requestEvent({ auth: flagged })), ForbiddenError, r.path);
   });
 

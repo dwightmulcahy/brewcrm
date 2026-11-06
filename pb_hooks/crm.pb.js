@@ -139,6 +139,7 @@ routerAdd("GET", "/api/crm/status", (e) => {
 
 routerAdd("GET", "/api/crm/build", (e) => {
   const crm = require(`${__hooks}/lib/crm.js`);
+  crm.requireActive(e);
   return e.json(200, crm.buildInfo());
 }, $apis.requireAuth());
 
