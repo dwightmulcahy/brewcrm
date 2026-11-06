@@ -180,9 +180,9 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for planned improvements.
 
 1. Merge to `main`.
 2. `git tag v1.2.3 && git push origin v1.2.3`
-3. The Release workflow verifies the tag is on `main`, reruns CI, and publishes the multi-arch image (`linux/amd64`, `linux/arm64`) to Docker Hub, the offline ZIP + SHA-256, and Conventional Commit release notes.
+3. The Release workflow verifies the tag is on `main`, reruns CI, and publishes the multi-arch image (`linux/amd64`, `linux/arm64`) to the image registry, the offline ZIP + SHA-256, and Conventional Commit release notes.
 
-Required settings: repo variables `DOCKERHUB_USERNAME`, `DOCKERHUB_REPO` (`dwightmulcahy/brewcrm`); secret `DOCKERHUB_TOKEN`.
+Registry: Docker Hub when the `DOCKERHUB_USERNAME` variable and `DOCKERHUB_TOKEN` secret are both set (optional `DOCKERHUB_REPO`, e.g. `dwightmulcahy/brewcrm`); otherwise `ghcr.io/dwightmulcahy/brewcrm`, with no setup. The release run shows a notice when it falls back to GHCR. On GHCR the first image is a private package (profile → Packages); make it public or `docker login ghcr.io` on the NAS before pulling.
 
 ## API (authenticated)
 
