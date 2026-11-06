@@ -26,7 +26,7 @@ fi
 
 # Fail fast with a clear message instead of PocketBase's terse validation error
 if [ -n "${PB_ADMIN_PASSWORD:-}" ] && [ "${#PB_ADMIN_PASSWORD}" -lt 12 ]; then
-  printf '{"timestamp":"%s","level":"CRITICAL","message":"PB_ADMIN_PASSWORD must be at least 12 characters (with a letter and a number; a symbol unless it is 16+). Fix .env and restart."}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"timestamp":"%s","level":"CRITICAL","message":"PB_ADMIN_PASSWORD reached the container as %s characters; it must be at least 12 (with a letter and a number; a symbol unless it is 16+). In .env, a $ starts a variable and a space before # starts a comment: wrap the value in single quotes or write $ as $$. Fix .env and run docker compose up -d."}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${#PB_ADMIN_PASSWORD}"
   exit 1
 fi
 

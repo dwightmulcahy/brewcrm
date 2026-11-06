@@ -195,11 +195,13 @@ jobs:
                   if not any(b in l for b in banner):
                       bad.append(l)
           need = {"timestamp", "level", "method", "path", "status_code", "duration_ms", "client", "user_agent"}
-          missing = [r for r in records if not need <= r.keys()]
+          assert all({"timestamp", "level", "message"} <= r.keys() or "method" in r for r in records), "malformed log records"
+          access = [r for r in records if "method" in r]  # app/cron records (e.g. "gmail sync") have message instead
+          missing = [r for r in access if not need <= r.keys()]
           assert not bad, f"non-JSON log lines: {bad[:5]}"
           assert not missing, f"records missing fields: {missing[:3]}"
-          assert any(r["path"] == "/health" and r["status_code"] == 200 for r in records), "no /health access lines"
-          assert any(r["status_code"] == 401 for r in records), "auth failures not logged with their status"
+          assert any(r["path"] == "/health" and r["status_code"] == 200 for r in access), "no /health access lines"
+          assert any(r["status_code"] == 401 for r in access), "auth failures not logged with their status"
           print(f"{len(records)} JSON access lines OK")
           PY
       - name: Scan image for fixable high and critical vulnerabilities
