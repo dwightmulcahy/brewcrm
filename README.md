@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/logo.svg" alt="BrewCRM" width="330"></p>
+
 # BrewCRM
 
 [![CI](https://github.com/dwightmulcahy/brewcrm/actions/workflows/ci.yml/badge.svg)](https://github.com/dwightmulcahy/brewcrm/actions/workflows/ci.yml)
