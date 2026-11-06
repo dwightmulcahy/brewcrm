@@ -176,6 +176,8 @@ docker compose up -d --build
 
 CI pins every external GitHub Action to a commit SHA, pins the Docker base image by version and digest, verifies the PocketBase download against the release checksums, and rejects fixable high/critical image vulnerabilities with Trivy. PocketBase itself is pinned by `ARG PB_VERSION` in the `Dockerfile` and is not tracked by Dependabot.
 
+How the sales team uses BrewCRM day to day (plain-language guide with a sample week): [docs/USER-GUIDE.md](docs/USER-GUIDE.md).
+
 Step-by-step setup of Google Places, Gmail, Loyverse and SMTP (with links for getting each key): [docs/SETUP-SERVICES.md](docs/SETUP-SERVICES.md).
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for planned improvements.
