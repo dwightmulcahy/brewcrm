@@ -116,11 +116,11 @@ test('sales user signs in, adds an account and logs a visit', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible();
   await page.goto('/#/accounts'); // navigation is blocked until the password is changed
   await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible();
-  await page.getByLabel('Temporary password').fill(REP.password);
+  await page.getByLabel('Temporary password', { exact: true }).fill(REP.password);
   await page.getByLabel('New password', { exact: true }).fill('short');
   await expect(page.locator('.pw-rules li.ok')).toHaveCount(2); // letter + no email name
   await page.getByLabel('New password', { exact: true }).fill(REP.own);
-  await page.getByLabel('Confirm new password').fill(REP.own);
+  await page.getByLabel('Confirm new password', { exact: true }).fill(REP.own);
   await expect(page.locator('.pw-rules li:not(.ok)')).toHaveCount(0);
   await page.getByRole('button', { name: 'Save password' }).click();
   await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();
