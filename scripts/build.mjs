@@ -17,7 +17,24 @@ const out = path.resolve(process.env.OUT_DIR ?? path.join(root, 'dist', edition)
 const semver = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const appVersion = (process.env.APP_VERSION ?? '').trim().replace(/^v/, '');
 const version = semver.test(appVersion) ? appVersion : 'dev';
-const commit = /^[0-9a-f]{7,40}$/i.test(process.env.GIT_SHA ?? '') ? process.env.GIT_SHA.slice(0, 7).toLowerCase() : '';
+// Local Docker builds mount the checkout's .git (compose.yaml additional_contexts -> GIT_DIR)
+// so dev builds still show their commit.
+async function gitHead(dir) {
+  if (!dir) return '';
+  try {
+    const head = (await readFile(path.join(dir, 'HEAD'), 'utf8')).trim();
+    const ref = head.match(/^ref: (refs\/[^\s.][^\s]*)$/)?.[1];
+    if (!ref) return head; // detached HEAD
+    if (ref.includes('..')) return '';
+    try { return (await readFile(path.join(dir, ref), 'utf8')).trim(); } catch { /* packed ref */ }
+    const packed = await readFile(path.join(dir, 'packed-refs'), 'utf8');
+    return packed.split('\n').find((l) => l.endsWith(` ${ref}`))?.split(' ')[0] ?? '';
+  } catch {
+    return '';
+  }
+}
+const sha = process.env.GIT_SHA || (await gitHead(process.env.GIT_DIR));
+const commit = /^[0-9a-f]{7,40}$/i.test(sha) ? sha.slice(0, 7).toLowerCase() : '';
 const dockerfile = await readFile(path.join(root, 'Dockerfile'), 'utf8');
 const pbVersion = (dockerfile.match(/^ARG PB_VERSION=(\S+)/m) || [])[1];
 if (!pbVersion) throw new Error('PB_VERSION not found in Dockerfile');

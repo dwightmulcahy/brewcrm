@@ -11,6 +11,7 @@ const build = (edition, env = {}) => {
   const clean = { ...process.env };
   delete clean.APP_VERSION;
   delete clean.GIT_SHA;
+  delete clean.GIT_DIR;
   const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'build.mjs'), ...(edition ? [edition] : [])], {
     cwd: ROOT, env: { ...clean, OUT_DIR: out, ...env }, encoding: 'utf8',
   });
@@ -44,6 +45,28 @@ describe('scripts/build.mjs', () => {
     assert.ok(fs.statSync(path.join(r.out, 'start.sh')).mode & 0o100, 'start.sh is executable');
     assert.match(fs.readFileSync(path.join(r.out, 'start.cmd'), 'utf8'), /pocketbase\.exe serve/);
     assert.ok(fs.readFileSync(path.join(r.out, 'OFFLINE.md'), 'utf8').includes(meta.pocketbase));
+  });
+
+  test('dev builds read the commit from GIT_DIR (loose ref, packed ref, detached); GIT_SHA wins', () => {
+    const git = fs.mkdtempSync(path.join(os.tmpdir(), 'brewcrm-git-'));
+    const sha = (r) => r.json('pb_public/version.json').commit;
+    fs.mkdirSync(path.join(git, 'refs/heads'), { recursive: true });
+    fs.writeFileSync(path.join(git, 'HEAD'), 'ref: refs/heads/main\n');
+    fs.writeFileSync(path.join(git, 'refs/heads/main'), '35C7C08aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n');
+    assert.equal(sha(build('web', { GIT_DIR: git })), '35c7c08');
+    assert.equal(sha(build('web', { GIT_DIR: git, GIT_SHA: 'abcdef0' })), 'abcdef0');
+    fs.rmSync(path.join(git, 'refs/heads/main'));
+    fs.writeFileSync(path.join(git, 'packed-refs'), '# pack-refs with: peeled\n1111111bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb refs/heads/main\n');
+    assert.equal(sha(build('web', { GIT_DIR: git })), '1111111');
+    fs.writeFileSync(path.join(git, 'HEAD'), 'ref: refs/heads/other\n');
+    assert.equal(sha(build('web', { GIT_DIR: git })), '');
+    fs.writeFileSync(path.join(git, 'HEAD'), 'ref: refs/../../etc/passwd\n');
+    assert.equal(sha(build('web', { GIT_DIR: git })), '');
+    fs.writeFileSync(path.join(git, 'HEAD'), '2222222cccccccccccccccccccccccccccccccc\n');
+    assert.equal(sha(build('web', { GIT_DIR: git })), '2222222');
+    assert.equal(sha(build('web', { GIT_DIR: path.join(git, 'missing') })), '');
+    const v = build('web', { GIT_DIR: git }).json('pb_public/version.json');
+    assert.equal(v.version, 'dev');
   });
 
   test('invalid version/commit fall back to dev; unknown edition fails', () => {
