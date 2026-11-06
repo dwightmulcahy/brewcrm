@@ -720,10 +720,34 @@ function status() {
   };
 }
 
+// ---------------------------------------------------------------- build info
+// build.json is written by scripts/build.mjs next to pb_hooks. It names dependency versions, so
+// it's served to signed-in users only (/api/crm/build); the public version.json has just
+// version + commit.
+function markStarted() {
+  try { $app.store().set("crm:started_at", new Date().toISOString()); } catch (_) { /* best effort */ }
+}
+
+function buildInfo() {
+  let b = {};
+  try { b = JSON.parse(toString($os.readFile(`${__hooks}/../build.json`))) || {}; } catch (_) { /* missing in dev */ }
+  let started = "";
+  try { started = $app.store().get("crm:started_at") || ""; } catch (_) { /* best effort */ }
+  return {
+    version: typeof b.version === "string" && b.version ? b.version : "dev",
+    commit: typeof b.commit === "string" ? b.commit : "",
+    edition: typeof b.edition === "string" ? b.edition : "",
+    pocketbase: typeof b.pocketbase === "string" ? b.pocketbase : "",
+    built_at: typeof b.builtAt === "string" ? b.builtAt : "",
+    started_at: started,
+  };
+}
+
 module.exports = {
   writeJsonLine, log,
   PASSWORD_MIN, PASSWORD_LONG, passwordProblems, assertPassword, requireActive, applyEnvSettings, mailConfigured,
   env, kvGet, kvSet, kvDel, placesSearch, placeDetails, convertLead,
   googleAuthUrl, googleCallback, gmailSync, loyverseCustomers, loyverseSync,
   dormantSweep, onTouchCreated, status, appUrl, areaFromAddress, typeFromPlace,
+  markStarted, buildInfo,
 };

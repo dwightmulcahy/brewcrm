@@ -18,7 +18,7 @@ if (!PB || !fs.existsSync(PB)) {
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'brewcrm-e2e-'));
 const app = path.join(work, 'app');
 const data = path.join(work, 'data');
-const built = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'build.mjs'), 'web'], { env: { ...process.env, OUT_DIR: app }, stdio: 'inherit' });
+const built = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'build.mjs'), 'web'], { env: { ...process.env, OUT_DIR: app, APP_VERSION: '0.9.0', GIT_SHA: 'abc1234def5678' }, stdio: 'inherit' });
 if (built.status !== 0) process.exit(1);
 
 await startMockServer(E2E.mockPort);

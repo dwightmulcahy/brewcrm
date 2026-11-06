@@ -127,6 +127,8 @@ export function createApp() {
   };
   const log = { saves: 0, deletes: 0 };
   const failSave = new Set();
+  const storeMap = new Map();
+  const store = { get: (k) => storeMap.get(k), set: (k, v) => { storeMap.set(k, v); } };
 
   const col = (name) => {
     if (!collections.has(name)) throw new NotFound(`collection ${name} not found`);
@@ -172,6 +174,7 @@ export function createApp() {
     rows,
     log,
     settings() { return settings; },
+    store() { return store; },
     findCollectionByNameOrId(name) { return col(name); },
     save(model) {
       if (model && model._isSettings) { log.settingsSaves = (log.settingsSaves || 0) + 1; return; }
@@ -244,7 +247,7 @@ export function defineSchema(app) {
 }
 
 // ---------------------------------------------------------------- runtime
-export function createRuntime({ env = {}, routes = [], stdoutIsFile = false } = {}) {
+export function createRuntime({ env = {}, routes = [], stdoutIsFile = false, files = {} } = {}) {
   const app = defineSchema(createApp());
   const stdout = [];
   const consoleLines = [];
@@ -277,6 +280,11 @@ export function createRuntime({ env = {}, routes = [], stdoutIsFile = false } = 
         if (p !== '/dev/stdout') throw new Error('stat ' + p);
         if (stdoutIsFile === 'throw') throw new Error('no stat');
         return { mode: () => ({ isRegular: () => stdoutIsFile === true }) };
+      },
+      readFile: (p) => {
+        const key = Object.keys(files).find((f) => path.resolve(p) === path.resolve(f));
+        if (key === undefined) throw new Error('open ' + p + ': no such file');
+        return files[key];
       },
       writeFile: (p, data) => { if (p !== '/dev/stdout') throw new Error('writeFile ' + p); stdout.push(String(data)); },
     },

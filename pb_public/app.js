@@ -129,14 +129,50 @@ window.addEventListener("hashchange", render);
 
 // ---------------------------------------------------------------- login
 // ---------------------------------------------------------------- build version
+const REPO_URL = "https://github.com/dwightmulcahy/brewcrm";
 let BUILD = null;
 const buildLabel = (b) => (b.version === "dev" ? "dev" : "v" + b.version) + (b.commit && b.version === "dev" ? " " + b.commit : "");
 function showBuildVersion() {
   if (!BUILD) return;
   for (const el of $$("[data-build-version]")) {
     el.textContent = buildLabel(BUILD);
-    el.title = `Version ${BUILD.version}${BUILD.commit ? ", commit " + BUILD.commit : ""}`;
+    el.hidden = false;
+    el.title = "About this build";
+    el.setAttribute("aria-label", `Version ${buildLabel(BUILD)}: show build details`);
+    el.onclick = openAbout;
   }
+}
+
+// About dialog: public version/commit for everyone; build + server details once signed in
+async function openAbout() {
+  const signedIn = pb.authStore.isValid;
+  let info = { ...BUILD };
+  if (signedIn) { try { info = { ...info, ...(await api("/build")) }; } catch (_) { /* show what we have */ } }
+  const rows = [
+    ["Version", info.version === "dev" ? "dev (local build)" : "v" + info.version],
+    ["Commit", info.commit],
+    ["Edition", { web: "Web (Docker / server)", offline: "Offline (single computer)" }[info.edition] || info.edition],
+    ["PocketBase", info.pocketbase && "v" + info.pocketbase],
+    ["Built", info.built_at && fmtDateTime(info.built_at)],
+    ["Server up since", info.started_at && fmtDateTime(info.started_at)],
+    ["Signed in as", pb.authStore.record?.email],
+  ].filter(([, v]) => v);
+  const text = ["BrewCRM", ...rows.map(([k, v]) => `${k}: ${v}`), `Browser: ${navigator.userAgent}`].join("\n");
+  const notes = info.version === "dev" ? `${REPO_URL}/commits/main` : `${REPO_URL}/releases/tag/v${encodeURIComponent(info.version)}`;
+  const dlg = openDialog(`
+    <div class="about">
+      <h2><img src="logo-mark.svg" alt="" width="28" height="35"> BrewCRM</h2>
+      <dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${k === "Commit" ? `<a href="${REPO_URL}/commit/${esc(v)}" target="_blank" rel="noopener"><code>${esc(v)}</code></a>` : esc(v)}</dd>`).join("")}</dl>
+      ${signedIn ? "" : `<p class="muted small">Sign in to see build and server details.</p>`}
+      <p class="about-links"><a href="${notes}" target="_blank" rel="noopener">${info.version === "dev" ? "Recent changes" : "Release notes"}</a> · <a href="${REPO_URL}/issues/new" target="_blank" rel="noopener">Report a problem</a></p>
+      <div class="dlg-actions">
+        <button type="button" class="btn" data-copy>Copy details</button>
+        <button type="button" class="btn btn-primary" data-close>Close</button>
+      </div>
+    </div>`);
+  $("[data-copy]", dlg).addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(text); toast("Build details copied"); } catch (_) { toast("Couldn't copy. Select the text instead.", true); }
+  });
 }
 fetch("version.json", { cache: "no-store" })
   .then((r) => (r.ok ? r.json() : null))
@@ -146,7 +182,7 @@ fetch("version.json", { cache: "no-store" })
 function renderLogin() {
   app.innerHTML = `
     <form class="login form" id="loginForm">
-      <h1>BrewCRM <span class="build-version" data-build-version></span></h1>
+      <h1>BrewCRM <button type="button" class="build-version" data-build-version hidden></button></h1>
       <p class="muted">Sign in with the account your admin created.</p>
       <label>Email<input name="email" type="email" autocomplete="username" required></label>
       <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
