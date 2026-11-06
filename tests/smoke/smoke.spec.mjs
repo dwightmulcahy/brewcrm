@@ -49,7 +49,7 @@ test('.env admin signs in to the CRM (mixed-case email typed)', async ({ page })
   test.skip(!ADMIN_EMAIL, 'PB_ADMIN_EMAIL not set');
   await page.goto('/');
   await page.getByLabel('Email').fill(process.env.PB_ADMIN_EMAIL);
-  await page.getByLabel('Password').fill(ADMIN_PASSWORD);
+  await page.getByLabel('Password', { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();
 });
@@ -57,7 +57,7 @@ test('.env admin signs in to the CRM (mixed-case email typed)', async ({ page })
 test('wrong password shows a clear message', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Email').fill('nobody@example.com');
-  await page.getByLabel('Password').fill('definitely-wrong-1');
+  await page.getByLabel('Password', { exact: true }).fill('definitely-wrong-1');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.locator('#loginErr')).toBeVisible();
 });
@@ -109,18 +109,18 @@ test('sales user signs in, adds an account and logs a visit', async ({ page }) =
 
   await page.goto('/');
   await page.getByLabel('Email').fill(REP.email);
-  await page.getByLabel('Password').fill(REP.password);
+  await page.getByLabel('Password', { exact: true }).fill(REP.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   // First sign-in with an admin-set password: must choose their own
   await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible();
   await page.goto('/#/accounts'); // navigation is blocked until the password is changed
   await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible();
-  await page.getByLabel('Temporary password').fill(REP.password);
+  await page.getByLabel('Temporary password', { exact: true }).fill(REP.password);
   await page.getByLabel('New password', { exact: true }).fill('short');
   await expect(page.locator('.pw-rules li.ok')).toHaveCount(2); // letter + no email name
   await page.getByLabel('New password', { exact: true }).fill(REP.own);
-  await page.getByLabel('Confirm new password').fill(REP.own);
+  await page.getByLabel('Confirm new password', { exact: true }).fill(REP.own);
   await expect(page.locator('.pw-rules li:not(.ok)')).toHaveCount(0);
   await page.getByRole('button', { name: 'Save password' }).click();
   await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();

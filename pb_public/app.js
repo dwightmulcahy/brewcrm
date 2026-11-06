@@ -349,8 +349,8 @@ route("pipeline", async () => {
           </header>
           <div class="col-body">
             ${items.map((d) => `
-              <article class="deal" draggable="true" data-id="${d.id}" style="${stageStyle(s)}">
-                <a class="name" href="#/account/${d.account}">${esc(d.expand?.account?.name || "—")}</a>
+              <article class="deal" data-id="${d.id}" style="${stageStyle(s)}">
+                <a class="name" href="#/account/${d.account}" draggable="false">${esc(d.expand?.account?.name || "—")}</a>
                 <div class="sub">${esc(d.title || "")}${d.expand?.account?.area ? " · " + esc(d.expand.account.area) : ""}</div>
                 ${d.value || d.est_liters_month ? `<div class="sub">${d.value ? esc(fmtMoney(d.value)) : ""}${d.value && d.est_liters_month ? " · " : ""}${d.est_liters_month ? d.est_liters_month + " L/mo" : ""}</div>` : ""}
                 ${d.next_followup_at ? `<div class="sub ${isOverdue(d.next_followup_at) ? "due" : ""}">Follow up ${esc(fmtDate(d.next_followup_at))}</div>` : ""}
@@ -378,10 +378,51 @@ route("pipeline", async () => {
   };
 
   board.addEventListener("change", (ev) => { const id = ev.target.dataset.stageSelect; if (id) move(id, ev.target.value); });
-  board.addEventListener("dragstart", (ev) => { const c = ev.target.closest(".deal"); if (c) ev.dataTransfer.setData("text/plain", c.dataset.id); });
-  board.addEventListener("dragover", (ev) => { const col = ev.target.closest(".col"); if (col) { ev.preventDefault(); $$(".col.drop").forEach((c) => c !== col && c.classList.remove("drop")); col.classList.add("drop"); } });
-  board.addEventListener("dragleave", (ev) => { const col = ev.target.closest(".col"); if (col && !col.contains(ev.relatedTarget)) col.classList.remove("drop"); });
-  board.addEventListener("drop", (ev) => { const col = ev.target.closest(".col"); if (!col) return; ev.preventDefault(); col.classList.remove("drop"); move(ev.dataTransfer.getData("text/plain"), col.dataset.stage); });
+  // Drag cards between columns with pointer events (mouse, touch, pen). HTML5 drag-and-drop
+  // doesn't work on phones/tablets. Touch needs a short press first so swipes still scroll.
+  let drag = null, eatClick = false;
+  const colAt = (x, y) => document.elementFromPoint(x, y)?.closest(".col");
+  const highlight = (col) => { $$(".col", board).forEach((c) => c.classList.toggle("drop", c === col)); };
+  const onKey = (ev) => { if (ev.key === "Escape") endDrag(null); };
+  const endDrag = (ev) => {
+    const d = drag; if (!d) return;
+    drag = null; clearTimeout(d.timer); d.ghost?.remove(); d.card.classList.remove("dragging");
+    document.body.classList.remove("dragging"); highlight(null); window.removeEventListener("keydown", onKey);
+    if (!d.active) return;
+    eatClick = true; setTimeout(() => { eatClick = false; }, 0);
+    const col = ev && colAt(ev.clientX, ev.clientY);
+    if (col) move(d.card.dataset.id, col.dataset.stage);
+  };
+  board.addEventListener("dragstart", (ev) => ev.preventDefault()); // no native link/text drags
+  board.addEventListener("pointerdown", (ev) => {
+    const card = ev.target.closest(".deal");
+    if (!card || drag || ev.button !== 0 || ev.target.closest("select, button, input")) return;
+    const touch = ev.pointerType === "touch";
+    drag = { card, id: ev.pointerId, x: ev.clientX, y: ev.clientY, armed: !touch, active: false, touch };
+    if (touch) drag.timer = setTimeout(() => { if (drag) { drag.armed = true; card.classList.add("dragging"); navigator.vibrate?.(15); } }, 250);
+  });
+  board.addEventListener("pointermove", (ev) => {
+    if (!drag || ev.pointerId !== drag.id) return;
+    const dist = Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y);
+    if (!drag.armed) { if (dist > 8) endDrag(null); return; } // a swipe: let it scroll
+    if (!drag.active) {
+      if (!drag.touch && dist < 5) return;
+      const r = drag.card.getBoundingClientRect();
+      drag.active = true; drag.dx = drag.x - r.left; drag.dy = drag.y - r.top;
+      drag.ghost = Object.assign(drag.card.cloneNode(true), { className: "deal drag-ghost" });
+      drag.ghost.style.width = `${r.width}px`; drag.ghost.setAttribute("aria-hidden", "true");
+      document.body.append(drag.ghost); drag.card.classList.add("dragging"); document.body.classList.add("dragging");
+      board.setPointerCapture?.(ev.pointerId); window.addEventListener("keydown", onKey);
+    }
+    ev.preventDefault();
+    drag.ghost.style.left = `${ev.clientX - drag.dx}px`; drag.ghost.style.top = `${ev.clientY - drag.dy}px`;
+    highlight(colAt(ev.clientX, ev.clientY));
+  });
+  board.addEventListener("pointerup", (ev) => { if (drag && ev.pointerId === drag.id) endDrag(ev); });
+  board.addEventListener("pointercancel", () => endDrag(null));
+  board.addEventListener("touchmove", (ev) => { if (drag?.armed) ev.preventDefault(); }, { passive: false });
+  board.addEventListener("contextmenu", (ev) => { if (drag?.touch) ev.preventDefault(); });
+  board.addEventListener("click", (ev) => { if (eatClick) { ev.preventDefault(); ev.stopPropagation(); } }, true);
   $("#pf").addEventListener("input", draw);
   $("#showLost").addEventListener("change", draw);
   $("#newDeal").addEventListener("click", () => dealDialog(null, null, render));
@@ -951,6 +992,34 @@ route("settings", async (_, qs) => {
   const sq = $("#sqSync");
   if (sq) sq.addEventListener("click", async () => { const r = await busy(sq, () => api("/sync/pos", { method: "POST" })); toast(r.note || r.skipped || `${r.updated} accounts updated, ${r.created} new receipts`); render(); });
 });
+
+// ---------------------------------------------------------------- password show/hide
+// Adds a Show/Hide button to every password field as it appears. The button sits outside the
+// <label> so the field's accessible name stays exactly the label text.
+function addPasswordToggle(input) {
+  const label = input.closest("label");
+  if (!label || input.dataset.pwToggle) return;
+  input.dataset.pwToggle = "1";
+  const name = (label.firstChild?.textContent || "password").trim().toLowerCase();
+  const wrap = document.createElement("div");
+  wrap.className = "pw-field";
+  label.replaceWith(wrap);
+  const btn = document.createElement("button");
+  btn.type = "button"; btn.className = "pw-toggle";
+  const set = (show) => {
+    input.type = show ? "text" : "password";
+    btn.textContent = show ? "Hide" : "Show";
+    btn.setAttribute("aria-label", `${show ? "Hide" : "Show"} ${name}`);
+    btn.setAttribute("aria-pressed", String(show));
+  };
+  set(false);
+  btn.addEventListener("click", () => { set(input.type === "password"); input.focus(); });
+  wrap.append(label, btn);
+  input.form?.addEventListener("reset", () => set(false)); // after re-attaching: detached inputs have no form
+}
+new MutationObserver(() => $$("input[type=password]:not([data-pw-toggle])").forEach(addPasswordToggle))
+  .observe(document.body, { childList: true, subtree: true });
+$$("input[type=password]").forEach(addPasswordToggle);
 
 // ---------------------------------------------------------------- boot
 $("#quickLog").addEventListener("click", () => {

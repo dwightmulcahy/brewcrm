@@ -64,3 +64,61 @@ test('new deal from the pipeline picks an account', async ({ page }) => {
   await expect(toast(page)).toHaveText('Deal saved');
   await expect(page.locator('.col[data-stage="prospect"]')).toContainText('Seasonal rotation');
 });
+
+test('drag a card by its account link with the mouse; Escape cancels; a click still opens the account', async ({ page, api }) => {
+  await api.account('Drag Link Bar', {}, { stage: 'prospect', title: 'Kegs' });
+  await signInAdmin(page);
+  const col = (s) => page.locator(`.col[data-stage="${s}"]`);
+  const link = page.locator('.deal a.name', { hasText: 'Drag Link Bar' });
+  const drop = async (target, { escape = false } = {}) => {
+    const a = await link.boundingBox(), b = await target.boundingBox();
+    await page.mouse.move(a.x + 5, a.y + a.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(a.x + 30, a.y + 30, { steps: 3 });
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 8 });
+    await expect(page.locator('.drag-ghost')).toBeVisible();
+    await expect(target).toHaveClass(/drop/);
+    if (escape) await page.keyboard.press('Escape');
+    await page.mouse.up();
+  };
+  await drop(col('sampling'), { escape: true });
+  await expect(page.locator('.drag-ghost')).toHaveCount(0);
+  await expect(col('prospect')).toContainText('Drag Link Bar');
+  await drop(col('sampling'));
+  await expect(toast(page)).toHaveText('Moved to Sampling');
+  await expect(col('sampling')).toContainText('Drag Link Bar');
+  await expect(page).not.toHaveURL(/#\/account\//); // the drop didn't follow the link
+  await expect(page.locator('.col.drop')).toHaveCount(0);
+  await link.click();
+  await expect(page).toHaveURL(/#\/account\//);
+});
+
+test('touch: press and hold, then drag; a quick swipe does not move the card', async ({ browser, api }) => {
+  const { account } = await api.account('Touch Bar', {}, { stage: 'prospect', title: 'Bottles' });
+  const ctx = await browser.newContext({ hasTouch: true, viewport: { width: 800, height: 900 } });
+  const page = await ctx.newPage();
+  await signInAdmin(page);
+  const card = page.locator('.deal', { hasText: 'Touch Bar' });
+  const target = page.locator('.col[data-stage="sampling"]');
+  const cdp = await ctx.newCDPSession(page);
+  const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+  const a = await card.boundingBox(), b = await target.boundingBox();
+  const sx = a.x + a.width / 2, sy = a.y + 12, tx = b.x + b.width / 2, ty = b.y + b.height / 2;
+
+  await touch('touchStart', sx, sy); // swipe: moves before the hold delay
+  for (let i = 1; i <= 5; i++) await touch('touchMove', sx + i * 10, sy + i * 10);
+  await touch('touchEnd');
+  await expect(page.locator('.drag-ghost')).toHaveCount(0);
+  await expect(page.locator('.col[data-stage="prospect"]')).toContainText('Touch Bar');
+
+  await touch('touchStart', sx, sy);
+  await page.waitForTimeout(400);
+  await expect(card).toHaveClass(/dragging/);
+  for (let i = 1; i <= 8; i++) await touch('touchMove', sx + ((tx - sx) * i) / 8, sy + ((ty - sy) * i) / 8);
+  await expect(page.locator('.drag-ghost')).toBeVisible();
+  await touch('touchEnd');
+  await expect(target).toContainText('Touch Bar');
+  await expect(page.locator('#toast')).toHaveText('Moved to Sampling');
+  expect(account.id).toBeTruthy();
+  await ctx.close();
+});

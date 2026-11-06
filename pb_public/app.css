@@ -90,6 +90,10 @@ input, select, textarea {
 }
 textarea { min-height: 84px; resize: vertical; }
 label { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); font-weight: 500; }
+.pw-field { position: relative; }
+.pw-field input { padding-right: 64px; }
+.pw-toggle { position: absolute; right: 4px; bottom: 4px; min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink-2); font: 600 13px var(--body); cursor: pointer; }
+.pw-toggle:hover, .pw-toggle:focus-visible { background: var(--line); color: var(--ink); }
 .form { display: grid; gap: 12px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -107,7 +111,11 @@ label { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); font-weig
 .deal {
   background: #fff; border: 1px solid var(--line); border-left: 5px solid var(--stage);
   border-radius: var(--r-sm); padding: 8px 10px; cursor: grab;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
+.deal.dragging { opacity: .4; }
+.drag-ghost { position: fixed; z-index: 1000; pointer-events: none; margin: 0; transform: rotate(2deg); box-shadow: 0 8px 24px rgba(0,0,0,.18); cursor: grabbing; }
+body.dragging, body.dragging * { cursor: grabbing !important; }
 .deal a.name { font-weight: 600; color: var(--ink); text-decoration: none; }
 .deal a.name:hover { text-decoration: underline; }
 .deal .sub { font-size: 13px; color: var(--ink-2); }
