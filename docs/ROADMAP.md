@@ -6,7 +6,7 @@ Prioritized from a review of the code, the deployment (QNAP + hotpot + logwatch)
 
 | # | Improvement | Why | Effort |
 |---|---|---|---|
-| 1 | **Cut the first release.** Port repo-template's GHCR fallback to brewcrm and tag `v0.1.0` | `release.yml` still needs Docker Hub secrets, so there's no image for the NAS to pull yet | S |
+| 1 | **Cut the first release**: tag `v0.1.0` (publishes to GHCR unless Docker Hub is configured) | There's no image for the NAS to pull yet | S |
 | 2 | **Restrict the admin dashboard (`/_/`)** to LAN/VPN addresses (`ADMIN_ALLOW_CIDRS`) and turn on PocketBase MFA for superusers | Through hotpot, `/_/` is reachable from the internet and protected only by a password | S |
 | 3 | **Trusted proxy header from `.env`** (`TRUSTED_PROXY_HEADERS=X-Real-IP`) applied at startup | Today it's a manual `/_/` step. Without it, rate limits and logwatch see every visitor as hotpot's IP | S |
 | 4 | **Encrypt secrets at rest.** Run PocketBase with `--encryptionEnv` (encrypts settings, e.g. the SMTP password) and encrypt the Gmail refresh token stored in `kv` | Anyone with a copy of `pb_data` or a backup can read the mailbox token | M |
