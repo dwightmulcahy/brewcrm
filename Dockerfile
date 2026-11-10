@@ -2,7 +2,7 @@
 # Empty unless compose.yaml supplies the checkout's .git as the "git" build context
 FROM scratch AS git
 
-FROM node:26.13.0-alpine3.24@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS build
+FROM node:26.13.0-alpine3.24@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS build
 # PocketBase is fetched from the official GitHub release and verified against the
 # release's checksums.txt. Bump PB_VERSION deliberately (not tracked by Dependabot).
 ARG PB_VERSION=0.40.6
@@ -29,7 +29,7 @@ COPY pb_migrations ./pb_migrations
 RUN --mount=type=bind,from=git,target=/git \
     OUT_DIR=/out/app APP_VERSION="${APP_VERSION}" GIT_SHA="${GIT_SHA}" GIT_DIR=/git node scripts/build.mjs web
 
-FROM node:26.13.0-alpine3.24@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94
+FROM node:26.13.0-alpine3.24@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216
 ENV PORT=8080 TZ=UTC
 WORKDIR /app
 # Runtime is the static PocketBase binary; drop Node and package managers entirely.
