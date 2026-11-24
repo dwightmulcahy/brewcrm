@@ -57,3 +57,26 @@ def _build_version(tmp_path, **env):
 )
 def test_version_json(tmp_path, env, expected):
     assert _build_version(tmp_path, **env) == expected
+
+
+def test_changelog_placeholder_or_bundled_notes(tmp_path):
+    out = tmp_path / "c"
+
+    def run():
+        subprocess.run(["node", "scripts/build.mjs", "web"], cwd=ROOT,
+                       env={**os.environ, "OUT_DIR": str(out), "APP_VERSION": "3.1.0"},
+                       check=True, capture_output=True)
+
+    src = ROOT / "pb_public" / "changelog.json"
+    assert not src.exists(), "generated at release time only"
+    run()
+    data = json.loads((out / "pb_public" / "changelog.json").read_text())
+    assert data == {"current": "3.1.0", "repository": "dwightmulcahy/brewcrm", "releases": []}
+    try:
+        src.write_text('{"current": "3.1.0", "releases": [{"version": "3.1.0"}]}')
+        run()
+        assert json.loads((out / "pb_public" / "changelog.json").read_text())["releases"] == [{"version": "3.1.0"}]
+    finally:
+        src.unlink()
+    html = (out / "pb_public" / "index.html").read_text()
+    assert 'src="whats-new.js" data-src="changelog.json"' in html and "data-whats-new" in html
