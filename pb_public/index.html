@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="app.css">
+  <!-- "What's new" after an upgrade; changelog.json is bundled at release time -->
+  <script src="whats-new.js" data-src="changelog.json" data-key="brewcrm.seenVersion" defer></script>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='7' y='5' width='16' height='23' rx='2' fill='%23C47F17'/%3E%3Crect x='7' y='5' width='16' height='5' fill='%23EDF0EA'/%3E%3Cpath d='M23 11h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-3' stroke='%232F5D46' stroke-width='2.5' fill='none'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -16,6 +18,7 @@
     <div class="brand-wrap">
       <a class="brand" href="#/pipeline">BrewCRM</a>
       <button type="button" class="build-version" data-build-version hidden></button>
+      <button type="button" class="whats-new-link" data-whats-new>What's new</button>
     </div>
     <nav class="nav" id="nav">
       <a href="#/pipeline" data-route="pipeline">Pipeline</a>
