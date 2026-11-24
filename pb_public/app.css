@@ -58,6 +58,9 @@ h3 { font-size: 19px; }
 }
 .build-version:hover, .build-version:focus-visible { background: rgba(255,255,255,.24); }
 .build-version[hidden], .build-version:empty { display: none; }
+.whats-new-link { font: inherit; font-size: 12px; color: inherit; opacity: .8; background: none; border: 0; padding: 2px 4px; cursor: pointer; text-decoration: underline; }
+.whats-new-link:hover, .whats-new-link:focus-visible { opacity: 1; }
+:root { --wn-bg: var(--panel); --wn-text: var(--ink); --wn-line: var(--line); --wn-accent: var(--hop); }
 .login .build-version { color: var(--ink-2); background: transparent; border-color: var(--line); }
 .login .build-version:hover, .login .build-version:focus-visible { background: var(--line); }
 .about h2 { display: flex; align-items: center; gap: 10px; }

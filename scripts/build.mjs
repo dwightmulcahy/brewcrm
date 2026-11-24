@@ -76,6 +76,14 @@ await writeFile(
   path.join(out, 'build.json'),
   JSON.stringify({ edition, version, commit, pocketbase: pbVersion, builtAt: new Date().toISOString() }, null, 2) + '\n',
 );
+// "What's new" notes: the release workflow writes pb_public/changelog.json
+// (scripts/build_changelog.py); dev builds get an empty placeholder
+const changelog = path.join(out, 'pb_public', 'changelog.json');
+try {
+  await readFile(changelog);
+} catch {
+  await writeFile(changelog, JSON.stringify({ current: version, repository: 'dwightmulcahy/brewcrm', releases: [] }) + '\n');
+}
 // Public copy for the UI: version and commit only (no dependency versions)
 await writeFile(path.join(out, 'pb_public', 'version.json'), JSON.stringify({ version, commit }) + '\n');
 console.log(`built ${edition} -> ${path.relative(root, out) || out}`);
